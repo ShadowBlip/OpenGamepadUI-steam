@@ -1,5 +1,7 @@
 # OpenGamepadUI Steam
 
+![](./docs/screen01.png)
+
 ## Requirements
 
 Currently, the following are required to run the Steam plugin:
