@@ -10,7 +10,6 @@ dist: build
 	mkdir -p dist
 	touch dist/.gdignore
 	cp $(BUILD_DIR)/plugins.zip dist/$(PLUGIN_NAME).zip
-	cp plugin.json dist/$(PLUGIN_NAME).json
 
 .PHONY: build
 build: $(PLUGINS_DIR)/$(PLUGIN_NAME)

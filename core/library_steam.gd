@@ -1,5 +1,8 @@
 extends Library
 
+# Other interesting commands
+# steamcmd +login shadowapex +apps_installed +quit
+
 @export var use_caching: bool = true
 
 const _apps_cache_file: String = "apps.json"
@@ -10,16 +13,16 @@ var _steam_registry: String = _steam_dir + "/registry.vdf"
 # Called when the node enters the scene tree for the first time.
 func _ready() -> void:
 	super()
-	print("Steam Library loaded")
+	logger = Log.get_logger("Steam")
+	logger.info("Steam Library loaded")
 
 
 # Return a list of installed steam apps
 # TODO: Figure out Steam auth
 func get_library_launch_items() -> Array:
-	print("Fetching Steam library...")
+	logger.info("Fetching Steam library...")
 	# Get all available apps
 	var app_ids: PackedStringArray = _get_available_apps()
-	print("Got app ids: ", app_ids)
 	var app_info: Dictionary = _get_app_info(app_ids)
 
 	# Check to see if those apps are games
@@ -41,7 +44,7 @@ func get_library_launch_items() -> Array:
 		item.provider_app_id = game["appid"]
 		item.name = game["common"]["name"]
 		item.command = "steam"
-		item.args = ["steam://rungameid/" + item.provider_app_id]
+		item.args = ["-silent", "-applaunch", item.provider_app_id]
 		item.tags = ["steam"]
 		item.installed = _is_installed(registry, item.provider_app_id)
 		items.append(item)
@@ -60,7 +63,7 @@ func _get_available_apps() -> PackedStringArray:
 	var output: Array = []
 	var code = OS.execute("steamctl", ["-l", "quiet", "apps", "list"], output)
 	if code != OK:
-		push_error("Error executing steamctl")
+		logger.error("Error executing steamctl")
 		return PackedStringArray()
 	
 	var app_ids: PackedStringArray = PackedStringArray([])
@@ -101,7 +104,7 @@ func _get_app_info(app_ids: Array) -> Dictionary:
 	for out in output:
 		var parsed = JSON.parse_string(out)
 		if parsed == null:
-			push_error("Error parsing app info")
+			logger.error("Error parsing app info")
 			return {}
 		
 		if use_caching:
@@ -114,7 +117,7 @@ func _get_app_info(app_ids: Array) -> Dictionary:
 
 func _load_registry(registry_vdf: String) -> Dictionary:
 	if OS.execute("vdf2json", [registry_vdf, "/tmp/steam_registry.json"]) != OK:
-		push_error("Error converting ", registry_vdf, " vdf registry to json")
+		logger.error("Error converting " + registry_vdf + " vdf registry to json")
 		return {}
 	
 	var file: FileAccess = FileAccess.open("/tmp/steam_registry.json", FileAccess.READ)

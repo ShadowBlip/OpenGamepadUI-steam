@@ -1,0 +1,6 @@
+[gd_scene load_steps=2 format=3 uid="uid://bvfgou3n0bicr"]
+
+[ext_resource type="Script" path="res://plugins/steam/core/boxart_steam.gd" id="1_t4bfj"]
+
+[node name="BoxArtSteam" type="Node"]
+script = ExtResource("1_t4bfj")

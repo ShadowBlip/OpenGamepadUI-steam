@@ -5,5 +5,7 @@ extends Plugin
 func _ready() -> void:
 	#var store: Node = load(plugin_base + "/core/store.tscn").instantiate()
 	#add_child(store)
-	var library: Node = load(plugin_base + "/core/library.tscn").instantiate()
+	var library: Library = load(plugin_base + "/core/library_steam.tscn").instantiate()
 	add_child(library)
+	var boxart: BoxArtProvider = load(plugin_base + "/core/boxart_steam.tscn").instantiate()
+	add_child(boxart)

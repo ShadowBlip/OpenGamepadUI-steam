@@ -1,7 +1,0 @@
-[gd_scene load_steps=2 format=3 uid="uid://dxx5t2iv5k8r5"]
-
-[ext_resource type="Script" path="res://plugins/steam/core/library.gd" id="1_tye5p"]
-
-[node name="SteamLibrary" type="Node"]
-script = ExtResource("1_tye5p")
-library_id = "steam"
