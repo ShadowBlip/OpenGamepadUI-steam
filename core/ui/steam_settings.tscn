@@ -1,0 +1,146 @@
+[gd_scene load_steps=3 format=3 uid="uid://b151h7llnklvf"]
+
+[ext_resource type="Script" path="res://plugins/steam/core/ui/steam_settings.gd" id="1_wqr7p"]
+[ext_resource type="PackedScene" uid="uid://df5o1o2dsik84" path="res://core/ui/components/button.tscn" id="2_f57x4"]
+
+[node name="SteamSettings" type="ScrollContainer"]
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+follow_focus = true
+script = ExtResource("1_wqr7p")
+
+[node name="ContentContainer" type="VBoxContainer" parent="."]
+offset_right = 296.0
+offset_bottom = 800.0
+size_flags_horizontal = 0
+size_flags_vertical = 3
+theme_override_constants/separation = 10
+
+[node name="StatusContainer" type="GridContainer" parent="ContentContainer"]
+offset_right = 296.0
+offset_bottom = 156.0
+size_flags_horizontal = 3
+columns = 2
+
+[node name="StatusLabel" type="Label" parent="ContentContainer/StatusContainer"]
+offset_right = 92.0
+offset_bottom = 26.0
+size_flags_horizontal = 3
+text = "Status: "
+horizontal_alignment = 2
+vertical_alignment = 1
+
+[node name="CurrentStatusLabel" type="Label" parent="ContentContainer/StatusContainer"]
+offset_left = 96.0
+offset_right = 296.0
+offset_bottom = 26.0
+size_flags_horizontal = 3
+text = "Not running"
+vertical_alignment = 1
+
+[node name="ConnectedLabel" type="Label" parent="ContentContainer/StatusContainer"]
+offset_top = 30.0
+offset_right = 92.0
+offset_bottom = 56.0
+size_flags_horizontal = 3
+text = "Connected: "
+horizontal_alignment = 2
+vertical_alignment = 1
+
+[node name="CurrentConnectedLabel" type="Label" parent="ContentContainer/StatusContainer"]
+offset_left = 96.0
+offset_top = 30.0
+offset_right = 296.0
+offset_bottom = 56.0
+size_flags_horizontal = 3
+text = "No"
+vertical_alignment = 1
+
+[node name="LoggedInLabel" type="Label" parent="ContentContainer/StatusContainer"]
+offset_top = 60.0
+offset_right = 92.0
+offset_bottom = 86.0
+size_flags_horizontal = 3
+text = "Logged in: "
+horizontal_alignment = 2
+vertical_alignment = 1
+
+[node name="CurrentLoggedInLabel" type="Label" parent="ContentContainer/StatusContainer"]
+offset_left = 96.0
+offset_top = 60.0
+offset_right = 296.0
+offset_bottom = 86.0
+size_flags_horizontal = 3
+text = "No"
+vertical_alignment = 1
+
+[node name="UsernameLabel" type="Label" parent="ContentContainer/StatusContainer"]
+offset_top = 92.0
+offset_right = 92.0
+offset_bottom = 118.0
+size_flags_horizontal = 3
+text = "Username: "
+horizontal_alignment = 2
+vertical_alignment = 1
+
+[node name="UsernameBox" type="LineEdit" parent="ContentContainer/StatusContainer"]
+custom_minimum_size = Vector2(200, 0)
+offset_left = 96.0
+offset_top = 90.0
+offset_right = 296.0
+offset_bottom = 121.0
+
+[node name="PasswordLabel" type="Label" parent="ContentContainer/StatusContainer"]
+offset_top = 127.0
+offset_right = 92.0
+offset_bottom = 153.0
+size_flags_horizontal = 3
+text = "Password: "
+horizontal_alignment = 2
+vertical_alignment = 1
+
+[node name="PasswordBox" type="LineEdit" parent="ContentContainer/StatusContainer"]
+offset_left = 96.0
+offset_top = 125.0
+offset_right = 296.0
+offset_bottom = 156.0
+secret = true
+
+[node name="TFALabel" type="Label" parent="ContentContainer/StatusContainer"]
+visible = false
+offset_top = 132.0
+offset_right = 89.0
+offset_bottom = 158.0
+size_flags_horizontal = 3
+text = "Code: "
+horizontal_alignment = 2
+vertical_alignment = 1
+
+[node name="TFABox" type="LineEdit" parent="ContentContainer/StatusContainer"]
+visible = false
+offset_top = 130.0
+offset_right = 89.0
+offset_bottom = 161.0
+
+[node name="HBoxContainer" type="HBoxContainer" parent="ContentContainer"]
+offset_top = 166.0
+offset_right = 296.0
+offset_bottom = 197.0
+
+[node name="LoginButton" parent="ContentContainer/HBoxContainer" instance=ExtResource("2_f57x4")]
+anchors_preset = 0
+anchor_right = 0.0
+anchor_bottom = 0.0
+offset_right = 296.0
+offset_bottom = 31.0
+grow_horizontal = 1
+grow_vertical = 1
+text = "Login"
+
+[node name="InfoLabel" type="Label" parent="ContentContainer"]
+offset_top = 207.0
+offset_right = 296.0
+offset_bottom = 230.0

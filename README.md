@@ -4,9 +4,12 @@
 
 ## Requirements
 
-Currently, the following are required to run the Steam plugin:
+You will need the following to build the Steam plugin:
 
-- steamctl
+- [pex](https://pex.readthedocs.io/en/latest/buildingpex.html)
+
+The following are required to run the Steam plugin:
+
 - vdf2json
 
 ## Usage
@@ -15,10 +18,4 @@ You can build and install this plugin with:
 
 ```bash
 make install
-```
-
-Once installed, you will need to authenticate your Steam account with:
-
-```bash
-steamctl login
 ```

@@ -1,0 +1,9 @@
+[gd_scene load_steps=3 format=3 uid="uid://bs8al4fqb0jje"]
+
+[ext_resource type="Script" path="res://plugins/steam/core/steam/client.gd" id="1_3jwty"]
+[ext_resource type="PackedScene" uid="uid://ecg44me3rx8m" path="res://core/systems/network/websocket_rpc_client.tscn" id="2_wqd3k"]
+
+[node name="SteamClient" type="Node" groups=["steam_client"]]
+script = ExtResource("1_3jwty")
+
+[node name="WebsocketRPCClient" parent="." instance=ExtResource("2_wqd3k")]
