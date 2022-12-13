@@ -4,12 +4,19 @@ import asyncio
 from jsonrpcserver import method, Success, Result, async_dispatch
 import websockets
 import json
+import vdf
 
 from steamctl.clients import CachingSteamClient
 from steamctl.utils.storage import UserDataFile
 from steam.enums import EResult, EOSType, EPersonaState
 
 client = CachingSteamClient()
+
+
+@method
+async def load_vdf(path) -> Result:
+    data = vdf.load(open(path))
+    return Success(data)
 
 
 @method

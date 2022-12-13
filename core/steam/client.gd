@@ -110,6 +110,10 @@ func connect_to_client() -> int:
 	return status
 
 
+func load_vdf(path: String) -> Variant:
+	return await client.make_request("load_vdf", [path])
+
+
 func is_logged_in() -> bool:
 	return await client.make_request("is_logged_in", [])
 
