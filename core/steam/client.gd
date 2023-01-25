@@ -15,6 +15,7 @@ var scripts := [
 var scripts_dir := "user://scripts/steam"
 var data_dir := "user://data/steam"
 var credentials_dir := "/".join([data_dir, "credentials"])
+var steam_pid: int
 var server_pid: int
 var client_started: bool = false
 var client_ready: bool = false
@@ -39,6 +40,9 @@ func _ready():
 	# Start the websockets server Steam Client
 	_start_client()
 
+	# Start the Steam Client in the background
+	#steam_pid = OS.create_process("steam", ["-silent"])
+	#logger.info("Started Steam Client with PID: {0}".format([steam_pid]))
 
 # Starts the steam client websocket server
 func _start_client():

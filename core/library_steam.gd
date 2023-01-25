@@ -2,6 +2,8 @@ extends Library
 
 # Other interesting commands
 # steamcmd +login shadowapex +apps_installed +quit
+# Steam Overlay Config is in:
+# ~/.steam/steam/userdata/<user_id>/config/localconfig.vdf
 
 const SteamClient := preload("res://plugins/steam/core/steam/client.gd")
 const _apps_cache_file: String = "apps.json"
@@ -27,9 +29,9 @@ func _on_logged_in():
 	for i in items:
 		var item: LibraryLaunchItem = i
 		# TODO: add/remove instead of reloading the whole library
-		if not library_manager.has_app(item.name):
+		if not LibraryManager.has_app(item.name):
 			logger.debug("App {0} was not loaded. Re-loading library from updated cache.".format([item.name]))
-			library_manager.reload_library()
+			LibraryManager.reload_library()
 			return
 			
 	logger.debug("Library is already up-to-date")
@@ -81,7 +83,7 @@ func _load_library(caching_flags: int = Cache.FLAGS.LOAD|Cache.FLAGS.SAVE) -> Ar
 		item.provider_app_id = "{0}".format([app_id])
 		item.name = app_info[app_id]
 		item.command = "steam"
-		item.args = ["-silent", "-applaunch", item.provider_app_id]
+		item.args = ["-silent", "steam://rungameid/" + item.provider_app_id]
 		item.tags = ["steam"]
 		item.installed = _is_installed(library_folders, item.provider_app_id)
 		items.append(item)

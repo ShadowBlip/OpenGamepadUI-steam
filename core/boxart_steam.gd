@@ -7,26 +7,27 @@ const _supported_ext = [".jpg", ".png", ".jpeg"]
 
 # Maps the layout to a file suffix for caching
 var layout_map: Dictionary = {
-	BoxArtManager.Layout.GRID_PORTRAIT: "-portrait",
-	BoxArtManager.Layout.GRID_LANDSCAPE: "-landscape",
-	BoxArtManager.Layout.BANNER: "-banner",
-	BoxArtManager.Layout.LOGO: "-logo",
+	LAYOUT.GRID_PORTRAIT: "-portrait",
+	LAYOUT.GRID_LANDSCAPE: "-landscape",
+	LAYOUT.BANNER: "-banner",
+	LAYOUT.LOGO: "-logo",
 }
 
 # Maps the layout to the Steam CDN url
 var layout_url_map: Dictionary = {
-	BoxArtManager.Layout.GRID_PORTRAIT: "https://steamcdn-a.akamaihd.net/steam/apps/{0}/library_600x900.jpg",
-	BoxArtManager.Layout.GRID_LANDSCAPE: "https://steamcdn-a.akamaihd.net/steam/apps/{0}/header.jpg",
-	BoxArtManager.Layout.BANNER: "https://steamcdn-a.akamaihd.net/steam/apps/{0}/library_hero.jpg",
-	BoxArtManager.Layout.LOGO: "https://steamcdn-a.akamaihd.net/steam/apps/{0}/logo.png",
+	LAYOUT.GRID_PORTRAIT: "https://steamcdn-a.akamaihd.net/steam/apps/{0}/library_600x900.jpg",
+	LAYOUT.GRID_LANDSCAPE: "https://steamcdn-a.akamaihd.net/steam/apps/{0}/header.jpg",
+	LAYOUT.BANNER: "https://steamcdn-a.akamaihd.net/steam/apps/{0}/library_hero.jpg",
+	LAYOUT.LOGO: "https://steamcdn-a.akamaihd.net/steam/apps/{0}/logo.png",
 }
 
-var logger := Log.get_logger("BoxArtSteam")
 
 func _init() -> void:
+	super()
 	# Create the data directory if it doesn't exist
 	DirAccess.make_dir_recursive_absolute(_boxart_dir)
 	provider_id = "steam"
+	logger_name = "BoxArtSteam"
 
 
 func _ready() -> void:

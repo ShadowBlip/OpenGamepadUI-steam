@@ -19,13 +19,14 @@ func _ready() -> void:
 	#var store: Node = load(plugin_base + "/core/store.tscn").instantiate()
 	#add_child(store)
 	
-	# Load the Library implementation
-	var library: Library = load(plugin_base + "/core/library_steam.tscn").instantiate()
-	add_child(library)
-	
 	# Load the boxart implementation
 	var boxart: BoxArtProvider = load(plugin_base + "/core/boxart_steam.tscn").instantiate()
 	add_child(boxart)
+
+	# Load the Library implementation
+	var library: Library = load(plugin_base + "/core/library_steam.tscn").instantiate()
+	add_child(library)
+
 
 
 # Triggers when the Steam Client is ready
@@ -43,7 +44,7 @@ func _on_client_ready():
 	# If we're still not logged in, show a notification that a login is required.
 	if not await steam.is_logged_in():
 		logger.info("Steam login required")
-		notification_manager.show_notification("Steam login required")
+		NotificationManager.show_notification("Steam login required")
 	else:
 		logger.info("Steam is already logged in!")
 
