@@ -50,7 +50,7 @@ func _start_client():
 	# user directory.
 	DirAccess.make_dir_recursive_absolute(scripts_dir)
 	for script in scripts:
-		var filename := script.split("/")[-1]
+		var filename := script.split("/")[-1] as String
 		var file := FileAccess.open(script, FileAccess.READ)
 		var buffer := PackedByteArray()
 		while not file.eof_reached():
@@ -101,9 +101,9 @@ func _on_connected():
 	steam_client_ready.emit()
 	
 	# Check to see if we're already logged in, if so, emit our logged in signal
-	var is_logged_in = await is_logged_in()
-	logger.debug("Logged in: {0}".format([is_logged_in]))
-	if is_logged_in:
+	var is_logged = await is_logged_in()
+	logger.debug("Logged in: {0}".format([is_logged]))
+	if is_logged:
 		logged_in.emit()
 
 

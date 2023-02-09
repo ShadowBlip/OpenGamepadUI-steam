@@ -3,7 +3,7 @@ PLUGIN_NAME ?= $(shell grep 'plugin\.id' plugin.json | awk '{print $$2}' | grep 
 OPENGAMEPAD_UI_BASE ?= ../OpenGamepadUI
 PLUGINS_DIR := $(OPENGAMEPAD_UI_BASE)/plugins
 BUILD_DIR := $(OPENGAMEPAD_UI_BASE)/build
-INSTALL_DIR := $(HOME)/.local/share/godot/app_userdata/Open Gamepad UI/plugins
+INSTALL_DIR := $(HOME)/.local/share/opengamepadui/plugins
 
 .PHONY: dist
 dist: build

@@ -36,11 +36,11 @@ func _ready() -> void:
 
 
 # Looks for boxart in the local user directory based on the app name
-func get_boxart(item: LibraryItem, kind: int) -> Texture2D:
+func get_boxart(item: LibraryItem, kind: LAYOUT) -> Texture2D:
 	if not kind in layout_map:
 		logger.error("Unsupported boxart layout: {0}".format([kind]))
 		return null
-		
+
 	# Look for a Steam App ID in the library item
 	var steamAppID: String = ""
 	for l in item.launch_items:
@@ -50,11 +50,11 @@ func get_boxart(item: LibraryItem, kind: int) -> Texture2D:
 	if steamAppID == "":
 		logger.debug("No Steam App ID found in library item")
 		return null
-		
+
 	# Set our caching flags
 	var cache_flags = Cache.FLAGS.NONE
 	if use_caching:
-		cache_flags = Cache.FLAGS.LOAD|Cache.FLAGS.SAVE
+		cache_flags = Cache.FLAGS.LOAD | Cache.FLAGS.SAVE
 
 	# Try to fetch the artwork
 	logger.debug("Fetching steam box art for: " + item.name)
@@ -66,6 +66,5 @@ func get_boxart(item: LibraryItem, kind: int) -> Texture2D:
 		logger.warn("Image couldn't be downloaded for: " + item.name)
 	remove_child(http_image)
 	http_image.queue_free()
-	
+
 	return texture
-	

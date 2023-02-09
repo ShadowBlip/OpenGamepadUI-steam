@@ -12,6 +12,7 @@ var steam_libraryfolders: String = steam_dir + "/steam/steamapps/libraryfolders.
 
 @onready var steam_client: SteamClient = get_tree().get_first_node_in_group("steam_client")
 
+
 # Called when the node enters the scene tree for the first time.
 func _ready() -> void:
 	super()
@@ -22,7 +23,7 @@ func _ready() -> void:
 
 # Re-load our library when we've logged in
 func _on_logged_in():
-	# Upon login, fetch the user's library without loading it from cache and 
+	# Upon login, fetch the user's library without loading it from cache and
 	# reconcile it with the library manager.
 	logger.debug("Logged in. Updating library cache from Steam.")
 	var items: Array = await _load_library(Cache.FLAGS.SAVE)
@@ -30,23 +31,24 @@ func _on_logged_in():
 		var item: LibraryLaunchItem = i
 		# TODO: add/remove instead of reloading the whole library
 		if not LibraryManager.has_app(item.name):
-			logger.debug("App {0} was not loaded. Re-loading library from updated cache.".format([item.name]))
+			var msg := "App {0} was not loaded. Reloading from cache"
+			logger.debug(msg.format([item.name]))
 			LibraryManager.reload_library()
 			return
-			
+
 	logger.debug("Library is already up-to-date")
 
 
 # Return a list of installed steam apps. Called by the LibraryManager.
 func get_library_launch_items() -> Array:
-	return await _load_library(Cache.FLAGS.LOAD|Cache.FLAGS.SAVE)
+	return await _load_library(Cache.FLAGS.LOAD | Cache.FLAGS.SAVE)
 
 
 # Return a list of installed steam apps. Optionally caching flags can be passed to
 # determine caching behavior.
 # Example:
 #   _load_library(Cache.FLAGS.LOAD|Cache.FLAGS.SAVE)
-func _load_library(caching_flags: int = Cache.FLAGS.LOAD|Cache.FLAGS.SAVE) -> Array:
+func _load_library(caching_flags: int = Cache.FLAGS.LOAD | Cache.FLAGS.SAVE) -> Array:
 	# Check to see if our library was cached. If it was, return the cached
 	# items.
 	if caching_flags & Cache.FLAGS.LOAD and Cache.is_cached(_cache_dir, _apps_cache_file):
@@ -58,16 +60,16 @@ func _load_library(caching_flags: int = Cache.FLAGS.LOAD|Cache.FLAGS.SAVE) -> Ar
 				var item: Dictionary = i
 				items.append(LibraryLaunchItem.from_dict(item))
 			return items
-	
+
 	# Wait for the steam client if it's not ready
 	if not steam_client.client_ready:
 		logger.info("Steam client is not ready yet.")
 		return []
-		
+
 	if not await steam_client.is_logged_in():
 		logger.info("Steam client is not logged in yet.")
 		return []
-	
+
 	logger.info("Fetching Steam library...")
 	# Get all available apps
 	var app_ids: PackedInt64Array = await _get_available_apps()
@@ -119,8 +121,8 @@ func _load_library_folders(libraryfolders_vdf: String) -> Dictionary:
 
 
 func _is_installed(library_folders: Dictionary, app_id: String) -> bool:
-	for folder in library_folders['libraryfolders']:
-		var apps: Array = library_folders['libraryfolders'][folder]['apps'].keys()
+	for folder in library_folders["libraryfolders"]:
+		var apps: Array = library_folders["libraryfolders"][folder]["apps"].keys()
 		if apps.has(app_id):
 			return true
 	return false
