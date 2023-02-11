@@ -1,7 +1,9 @@
-[gd_scene load_steps=2 format=3 uid="uid://br414d4krimhy"]
+[gd_scene load_steps=3 format=3 uid="uid://br414d4krimhy"]
 
 [ext_resource type="Script" path="res://plugins/steam/core/library_steam.gd" id="1_p81j2"]
+[ext_resource type="Texture2D" uid="uid://daykjgd0jbefx" path="res://plugins/steam/assets/steam.svg" id="2_rhnrx"]
 
 [node name="SteamLibrary" type="Node"]
 script = ExtResource("1_p81j2")
 library_id = "steam"
+library_icon = ExtResource("2_rhnrx")

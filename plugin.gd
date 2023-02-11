@@ -2,6 +2,7 @@ extends Plugin
 
 const settings_menu := preload("res://plugins/steam/core/ui/steam_settings.tscn")
 const SteamClient := preload("res://plugins/steam/core/steam/client.gd")
+const icon := preload("res://plugins/steam/assets/steam.svg")
 
 var steam: SteamClient
 
@@ -44,8 +45,12 @@ func _on_client_ready():
 	# If we're still not logged in, show a notification that a login is required.
 	if not await steam.is_logged_in():
 		logger.info("Steam login required")
-		NotificationManager.show_notification("Steam login required")
+		var notify := Notification.new("Steam login required")
+		notify.icon = icon
+		NotificationManager.show(notify)
 	else:
+		var notify := Notification.new("Logged in to Steam")
+		notify.icon = icon
 		logger.info("Steam is already logged in!")
 
 

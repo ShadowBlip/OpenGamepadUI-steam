@@ -40,7 +40,7 @@ func _on_logged_in():
 
 
 # Return a list of installed steam apps. Called by the LibraryManager.
-func get_library_launch_items() -> Array:
+func get_library_launch_items() -> Array[LibraryLaunchItem]:
 	return await _load_library(Cache.FLAGS.LOAD | Cache.FLAGS.SAVE)
 
 
@@ -48,14 +48,16 @@ func get_library_launch_items() -> Array:
 # determine caching behavior.
 # Example:
 #   _load_library(Cache.FLAGS.LOAD|Cache.FLAGS.SAVE)
-func _load_library(caching_flags: int = Cache.FLAGS.LOAD | Cache.FLAGS.SAVE) -> Array:
+func _load_library(
+	caching_flags: int = Cache.FLAGS.LOAD | Cache.FLAGS.SAVE
+) -> Array[LibraryLaunchItem]:
 	# Check to see if our library was cached. If it was, return the cached
 	# items.
 	if caching_flags & Cache.FLAGS.LOAD and Cache.is_cached(_cache_dir, _apps_cache_file):
 		var json_items = Cache.get_json(_cache_dir, _apps_cache_file)
 		if json_items != null:
 			logger.debug("Available apps exist in cache. Using cache.")
-			var items := []
+			var items := [] as Array[LibraryLaunchItem]
 			for i in json_items:
 				var item: Dictionary = i
 				items.append(LibraryLaunchItem.from_dict(item))
@@ -79,7 +81,7 @@ func _load_library(caching_flags: int = Cache.FLAGS.LOAD | Cache.FLAGS.SAVE) -> 
 	var library_folders: Dictionary = await _load_library_folders(steam_libraryfolders)
 
 	# Generate launch items for each game
-	var items := []
+	var items := [] as Array[LibraryLaunchItem]
 	for app_id in app_info.keys():
 		var item: LibraryLaunchItem = LibraryLaunchItem.new()
 		item.provider_app_id = "{0}".format([app_id])

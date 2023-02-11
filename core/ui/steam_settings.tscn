@@ -1,7 +1,9 @@
-[gd_scene load_steps=3 format=3 uid="uid://b151h7llnklvf"]
+[gd_scene load_steps=5 format=3 uid="uid://b151h7llnklvf"]
 
 [ext_resource type="Script" path="res://plugins/steam/core/ui/steam_settings.gd" id="1_wqr7p"]
 [ext_resource type="PackedScene" uid="uid://df5o1o2dsik84" path="res://core/ui/components/button.tscn" id="2_f57x4"]
+[ext_resource type="PackedScene" uid="uid://d1hlp6c8wrqgv" path="res://core/ui/components/status.tscn" id="2_sx4hp"]
+[ext_resource type="PackedScene" uid="uid://d1rjdfxxrdccf" path="res://core/ui/components/text_input.tscn" id="2_yshc7"]
 
 [node name="SteamSettings" type="ScrollContainer"]
 anchors_preset = 15
@@ -14,96 +16,78 @@ size_flags_vertical = 3
 follow_focus = true
 script = ExtResource("1_wqr7p")
 
-[node name="ContentContainer" type="VBoxContainer" parent="."]
+[node name="MarginContainer" type="MarginContainer" parent="."]
 layout_mode = 2
-size_flags_horizontal = 0
+size_flags_horizontal = 3
+theme_override_constants/margin_left = 5
+theme_override_constants/margin_top = 5
+theme_override_constants/margin_right = 5
+theme_override_constants/margin_bottom = 5
+
+[node name="ContentContainer" type="VBoxContainer" parent="MarginContainer"]
+layout_mode = 2
 size_flags_vertical = 3
 theme_override_constants/separation = 10
 
-[node name="StatusContainer" type="GridContainer" parent="ContentContainer"]
+[node name="Status" parent="MarginContainer/ContentContainer" instance=ExtResource("2_sx4hp")]
+unique_name_in_owner = true
 layout_mode = 2
-size_flags_horizontal = 3
-columns = 2
+title = "Status"
+description = ""
+status = 2
+color = "red"
 
-[node name="StatusLabel" type="Label" parent="ContentContainer/StatusContainer"]
+[node name="ConnectedStatus" parent="MarginContainer/ContentContainer" instance=ExtResource("2_sx4hp")]
+unique_name_in_owner = true
 layout_mode = 2
-size_flags_horizontal = 3
-text = "Status: "
-horizontal_alignment = 2
-vertical_alignment = 1
+title = "Connected"
+description = ""
+color = "gray"
 
-[node name="CurrentStatusLabel" type="Label" parent="ContentContainer/StatusContainer"]
+[node name="LoggedInStatus" parent="MarginContainer/ContentContainer" instance=ExtResource("2_sx4hp")]
+unique_name_in_owner = true
 layout_mode = 2
-size_flags_horizontal = 3
-text = "Not running"
-vertical_alignment = 1
+title = "Logged In"
+description = ""
+color = "gray"
 
-[node name="ConnectedLabel" type="Label" parent="ContentContainer/StatusContainer"]
-layout_mode = 2
-size_flags_horizontal = 3
-text = "Connected: "
-horizontal_alignment = 2
-vertical_alignment = 1
-
-[node name="CurrentConnectedLabel" type="Label" parent="ContentContainer/StatusContainer"]
-layout_mode = 2
-size_flags_horizontal = 3
-text = "No"
-vertical_alignment = 1
-
-[node name="LoggedInLabel" type="Label" parent="ContentContainer/StatusContainer"]
-layout_mode = 2
-size_flags_horizontal = 3
-text = "Logged in: "
-horizontal_alignment = 2
-vertical_alignment = 1
-
-[node name="CurrentLoggedInLabel" type="Label" parent="ContentContainer/StatusContainer"]
-layout_mode = 2
-size_flags_horizontal = 3
-text = "No"
-vertical_alignment = 1
-
-[node name="UsernameLabel" type="Label" parent="ContentContainer/StatusContainer"]
-layout_mode = 2
-size_flags_horizontal = 3
-text = "Username: "
-horizontal_alignment = 2
-vertical_alignment = 1
-
-[node name="UsernameBox" type="LineEdit" parent="ContentContainer/StatusContainer"]
-custom_minimum_size = Vector2(200, 0)
+[node name="HSeparator" type="HSeparator" parent="MarginContainer/ContentContainer"]
 layout_mode = 2
 
-[node name="PasswordLabel" type="Label" parent="ContentContainer/StatusContainer"]
+[node name="UsernameTextInput" parent="MarginContainer/ContentContainer" instance=ExtResource("2_yshc7")]
+unique_name_in_owner = true
 layout_mode = 2
-size_flags_horizontal = 3
-text = "Password: "
-horizontal_alignment = 2
-vertical_alignment = 1
+title = "Username"
+description = ""
+text = ""
+placeholder_text = ""
+editable = true
 
-[node name="PasswordBox" type="LineEdit" parent="ContentContainer/StatusContainer"]
+[node name="PasswordTextInput" parent="MarginContainer/ContentContainer" instance=ExtResource("2_yshc7")]
+unique_name_in_owner = true
 layout_mode = 2
+title = "Password"
+description = ""
+text = ""
+placeholder_text = ""
+editable = true
 secret = true
 
-[node name="TFALabel" type="Label" parent="ContentContainer/StatusContainer"]
+[node name="TFATextInput" parent="MarginContainer/ContentContainer" instance=ExtResource("2_yshc7")]
+unique_name_in_owner = true
 visible = false
 layout_mode = 2
-size_flags_horizontal = 3
-text = "Code: "
-horizontal_alignment = 2
-vertical_alignment = 1
+title = "SteamGuard Code"
+description = "Enter your Steam Guard code to continue"
+text = ""
+placeholder_text = ""
+editable = true
+secret = true
 
-[node name="TFABox" type="LineEdit" parent="ContentContainer/StatusContainer"]
-visible = false
+[node name="HSeparatorLogin" type="HSeparator" parent="MarginContainer/ContentContainer"]
 layout_mode = 2
 
-[node name="HBoxContainer" type="HBoxContainer" parent="ContentContainer"]
-layout_mode = 2
-
-[node name="LoginButton" parent="ContentContainer/HBoxContainer" instance=ExtResource("2_f57x4")]
+[node name="LoginButton" parent="MarginContainer/ContentContainer" instance=ExtResource("2_f57x4")]
+unique_name_in_owner = true
 layout_mode = 2
 text = "Login"
-
-[node name="InfoLabel" type="Label" parent="ContentContainer"]
-layout_mode = 2

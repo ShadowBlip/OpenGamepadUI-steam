@@ -2,38 +2,40 @@ extends Control
 
 const SteamClient := preload("res://plugins/steam/core/steam/client.gd")
 const enums := preload("res://plugins/steam/core/steam/enums.gd")
+const icon := preload("res://plugins/steam/assets/steam.svg")
 
-@onready var status_label := $ContentContainer/StatusContainer/CurrentStatusLabel
-@onready var connected_label := $ContentContainer/StatusContainer/CurrentConnectedLabel
-@onready var logged_in_label := $ContentContainer/StatusContainer/CurrentLoggedInLabel
-@onready var user_box := $ContentContainer/StatusContainer/UsernameBox
-@onready var pass_box := $ContentContainer/StatusContainer/PasswordBox
-@onready var tfa_label := $ContentContainer/StatusContainer/TFALabel
-@onready var tfa_box := $ContentContainer/StatusContainer/TFABox
-@onready var login_button := $ContentContainer/HBoxContainer/LoginButton
-@onready var info_label := $ContentContainer/InfoLabel
+@onready var status := $%Status
+@onready var connected_status := $%ConnectedStatus
+@onready var logged_in_status := $%LoggedInStatus
+@onready var user_box := $%UsernameTextInput
+@onready var pass_box := $%PasswordTextInput
+@onready var tfa_box := $%TFATextInput
+@onready var login_button := $%LoginButton
 
 @onready var steam_client: SteamClient = get_tree().get_first_node_in_group("steam_client")
 
 # Called when the node enters the scene tree for the first time.
 func _ready() -> void:
 	# Set the status label
-	status_label.text = "Not running"
+	status.status = status.STATUS.CANCELLED
+	status.color = "red"
 	var set_running := func():
-		status_label.text = "Running"
+		status.status = status.STATUS.ACTIVE
+		status.color = "green"
 	if steam_client.client_started:
 		set_running.call()
 	steam_client.steam_client_started.connect(set_running)
 	
 	# Set the connection label
-	connected_label.text = "No"
+	connected_status.status = connected_status.STATUS.ACTIVE
 	if steam_client.client_ready:
 		_on_client_ready()
 	steam_client.steam_client_ready.connect(_on_client_ready)
 	
 	# Set our label if we log in
 	var on_login := func():
-		logged_in_label.text = "Yes"
+		logged_in_status.status = logged_in_status.STATUS.CLOSED
+		logged_in_status.color = "green"
 	steam_client.logged_in.connect(on_login)
 
 	# Connect the login button
@@ -41,11 +43,10 @@ func _ready() -> void:
 
 
 func _on_client_ready():
-	connected_label.text = "Yes"
+	connected_status.color = "green"
 
 
 func _on_login():
-	info_label.text = ""
 	var username: String = user_box.text
 	var password: String = pass_box.text
 	var tfa_code = null
@@ -55,15 +56,18 @@ func _on_login():
 	
 	# Un-hide the 2fa box if we require two-factor auth
 	if response == enums.EResult.AccountLoginDeniedNeedTwoFactor:
+		var notify := Notification.new("Please enter your Steam Guard code to log in")
+		notify.icon = icon
+		NotificationManager.show(notify)
 		tfa_box.visible = true
-		tfa_label.visible = true
-		info_label.text = "Please enter your Steam Guard code and login"
-		info_label.visible = true
 		return
 
 	# If we logged, woo!
 	if response == enums.EResult.OK:
-		info_label.text = "Logged in!"
-		logged_in_label.text = "Yes"
+		var notify := Notification.new("Logged in successfully!")
+		notify.icon = icon
+		NotificationManager.show(notify)
+		logged_in_status.status = logged_in_status.STATUS.CLOSED
+		logged_in_status.color = "green"
 		return
 
