@@ -4,6 +4,9 @@ const settings_menu := preload("res://plugins/steam/core/ui/steam_settings.tscn"
 const SteamClient := preload("res://plugins/steam/core/steam/client.gd")
 const icon := preload("res://plugins/steam/assets/steam.svg")
 
+var NotificationManager := (
+	load("res://core/global/notification_manager.tres") as NotificationManager
+)
 var steam: SteamClient
 
 

@@ -4,6 +4,10 @@ const SteamClient := preload("res://plugins/steam/core/steam/client.gd")
 const enums := preload("res://plugins/steam/core/steam/enums.gd")
 const icon := preload("res://plugins/steam/assets/steam.svg")
 
+var NotificationManager := (
+	load("res://core/global/notification_manager.tres") as NotificationManager
+)
+
 @onready var status := $%Status
 @onready var connected_status := $%ConnectedStatus
 @onready var logged_in_status := $%LoggedInStatus
