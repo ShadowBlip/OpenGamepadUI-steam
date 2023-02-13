@@ -11,7 +11,7 @@ var NotificationManager := (
 @onready var status := $%Status
 @onready var connected_status := $%ConnectedStatus
 @onready var logged_in_status := $%LoggedInStatus
-@onready var user_box := $%UsernameTextInput
+@onready var user_box := $%UsernameTextInput as ComponentTextInput
 @onready var pass_box := $%PasswordTextInput
 @onready var tfa_box := $%TFATextInput
 @onready var login_button := $%LoginButton
@@ -45,6 +45,17 @@ func _ready() -> void:
 	# Connect the login button
 	login_button.pressed.connect(_on_login)
 
+	# Focus on the next input when username or password is submitted 
+	var on_user_submitted := func():
+		pass_box.grab_focus.call_deferred()
+	user_box.keyboard_context.submitted.connect(on_user_submitted)
+	var on_pass_submitted := func():
+		if tfa_box.visible:
+			tfa_box.grab_focus.call_deferred()
+			return
+		login_button.grab_focus.call_deferred()
+	pass_box.keyboard_context.submitted.connect(on_pass_submitted)
+
 
 func _on_client_ready():
 	connected_status.color = "green"
@@ -64,6 +75,7 @@ func _on_login():
 		notify.icon = icon
 		NotificationManager.show(notify)
 		tfa_box.visible = true
+		tfa_box.grab_focus.call_deferred()
 		return
 
 	# If we logged, woo!

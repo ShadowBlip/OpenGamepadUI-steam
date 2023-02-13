@@ -59,18 +59,12 @@ unique_name_in_owner = true
 layout_mode = 2
 title = "Username"
 description = ""
-text = ""
-placeholder_text = ""
-editable = true
 
 [node name="PasswordTextInput" parent="MarginContainer/ContentContainer" instance=ExtResource("2_yshc7")]
 unique_name_in_owner = true
 layout_mode = 2
 title = "Password"
 description = ""
-text = ""
-placeholder_text = ""
-editable = true
 secret = true
 
 [node name="TFATextInput" parent="MarginContainer/ContentContainer" instance=ExtResource("2_yshc7")]
@@ -79,9 +73,6 @@ visible = false
 layout_mode = 2
 title = "SteamGuard Code"
 description = "Enter your Steam Guard code to continue"
-text = ""
-placeholder_text = ""
-editable = true
 secret = true
 
 [node name="HSeparatorLogin" type="HSeparator" parent="MarginContainer/ContentContainer"]
