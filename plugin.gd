@@ -12,7 +12,7 @@ var user := SettingsManager.get_value("plugin.steam", "user", "") as String
 
 # Called when the node enters the scene tree for the first time.
 func _ready() -> void:
-	logger = Log.get_logger("Steam", Log.LEVEL.DEBUG)
+	logger = Log.get_logger("Steam", Log.LEVEL.INFO)
 
 	# Load the Steam client
 	steam = load("res://plugins/steam/core/steam_client.tscn").instantiate()
@@ -25,13 +25,13 @@ func _ready() -> void:
 	#var store: Node = load(plugin_base + "/core/store.tscn").instantiate()
 	#add_child(store)
 
-	# Load the boxart implementation
-	var boxart: BoxArtProvider = load("res://plugins/steam/core/boxart_steam.tscn").instantiate()
-	add_child(boxart)
-
 	# Load the Library implementation
 	var library: Library = load("res://plugins/steam/core/library_steam.tscn").instantiate()
 	add_child(library)
+
+	# Load the boxart implementation
+	var boxart: BoxArtProvider = load("res://plugins/steam/core/boxart_steam.tscn").instantiate()
+	add_child(boxart)
 
 
 # Triggers when Steam has started

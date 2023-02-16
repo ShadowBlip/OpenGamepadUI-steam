@@ -33,6 +33,7 @@ func _init() -> void:
 func _ready() -> void:
 	super()
 	logger.info("Steam BoxArt provider loaded")
+	logger._level = Log.LEVEL.INFO
 
 
 # Looks for boxart in the local user directory based on the app name
@@ -47,6 +48,10 @@ func get_boxart(item: LibraryItem, kind: LAYOUT) -> Texture2D:
 		var launch_item: LibraryLaunchItem = l
 		if launch_item._provider_id == "steam":
 			steamAppID = launch_item.provider_app_id
+		for arg in launch_item.args:
+			if not arg.contains("steam://rungameid/"):
+				continue
+			steamAppID = arg.split("/")[-1]
 	if steamAppID == "":
 		logger.debug("No Steam App ID found in library item")
 		return null
@@ -63,7 +68,7 @@ func get_boxart(item: LibraryItem, kind: LAYOUT) -> Texture2D:
 	var url: String = layout_url_map[kind].format([steamAppID])
 	var texture: Texture2D = await http_image.fetch(url, cache_flags)
 	if texture == null:
-		logger.warn("Image couldn't be downloaded for: " + item.name)
+		logger.debug("Image couldn't be downloaded for: " + item.name)
 	remove_child(http_image)
 	http_image.queue_free()
 

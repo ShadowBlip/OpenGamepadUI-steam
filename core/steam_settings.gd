@@ -2,11 +2,8 @@ extends Control
 
 const SteamClient := preload("res://plugins/steam/core/steam_client.gd")
 const SettingsManager := preload("res://core/global/settings_manager.tres")
+const NotificationManager := preload("res://core/global/notification_manager.tres")
 const icon := preload("res://plugins/steam/assets/steam.svg")
-
-var NotificationManager := (
-	load("res://core/global/notification_manager.tres") as NotificationManager
-)
 
 @onready var status := $%Status
 @onready var connected_status := $%ConnectedStatus

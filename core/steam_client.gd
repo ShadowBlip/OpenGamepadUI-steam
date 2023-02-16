@@ -40,7 +40,7 @@ var cmd_queue: Array[String] = []
 var current_cmd := ""
 var current_output: Array[String] = []
 
-var logger := Log.get_logger("SteamClient", Log.LEVEL.DEBUG)
+var logger := Log.get_logger("SteamClient", Log.LEVEL.INFO)
 
 
 func _ready() -> void:
@@ -164,7 +164,7 @@ func get_available_apps() -> Array:
 				continue
 			if app_id in app_ids:
 				continue
-			app_ids.append(app_id)
+			app_ids.append(str(app_id))
 
 	return app_ids
 

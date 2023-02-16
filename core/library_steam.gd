@@ -14,7 +14,7 @@ const _apps_cache_file: String = "apps.json"
 # Called when the node enters the scene tree for the first time.
 func _ready() -> void:
 	super()
-	logger = Log.get_logger("Steam", Log.LEVEL.DEBUG)
+	logger = Log.get_logger("Steam", Log.LEVEL.INFO)
 	logger.info("Steam Library loaded")
 	steam.logged_in.connect(_on_logged_in)
 
@@ -26,7 +26,7 @@ func _on_logged_in(status: SteamClient.LOGIN_STATUS):
 
 	# Upon login, fetch the user's library without loading it from cache and
 	# reconcile it with the library manager.
-	logger.debug("Logged in. Updating library cache from Steam.")
+	logger.info("Logged in. Updating library cache from Steam.")
 	var items: Array = await _load_library(Cache.FLAGS.SAVE)
 	for i in items:
 		var item: LibraryLaunchItem = i
@@ -57,7 +57,7 @@ func _load_library(
 	if caching_flags & Cache.FLAGS.LOAD and Cache.is_cached(_cache_dir, _apps_cache_file):
 		var json_items = Cache.get_json(_cache_dir, _apps_cache_file)
 		if json_items != null:
-			logger.debug("Available apps exist in cache. Using cache.")
+			logger.info("Available apps exist in cache. Using cache.")
 			var items := [] as Array[LibraryLaunchItem]
 			for i in json_items:
 				var item: Dictionary = i
@@ -117,16 +117,17 @@ func _get_available_apps() -> Array:
 func _get_app_info(app_ids: Array) -> Dictionary:
 	var app_info := {}
 	for app_id in app_ids:
-		var info := await steam.get_app_info(str(app_id))
-		if not app_id in info:
+		var id := str(app_id)
+		var info := await steam.get_app_info(id)
+		if not id in info:
 			continue
-		if not "common" in info[app_id]:
+		if not "common" in info[id]:
 			continue
-		if not "type" in info[app_id]["common"]:
+		if not "type" in info[id]["common"]:
 			continue
-		if info[app_id]["common"]["type"] != "Game":  # Skip non-games
+		if info[id]["common"]["type"] != "Game":  # Skip non-games
 			continue
-		if not "name" in info[app_id]["common"]:
+		if not "name" in info[id]["common"]:
 			continue
-		app_info[app_id] = info[app_id]["common"]["name"]
+		app_info[id] = info[id]["common"]["name"]
 	return app_info
