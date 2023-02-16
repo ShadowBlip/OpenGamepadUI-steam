@@ -31,7 +31,7 @@ func _ready() -> void:
 		status.color = "green"
 	if steam.client_started:
 		set_running.call()
-	steam.ready.connect(set_running)
+	steam.bootstrap_finished.connect(set_running)
 	
 	# Set the connection label based on the steam client status
 	connected_status.status = connected_status.STATUS.ACTIVE

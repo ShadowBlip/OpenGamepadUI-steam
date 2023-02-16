@@ -7,6 +7,7 @@ extends Node
 ## to its stdout/stdin.
 
 const VDF = preload("res://plugins/steam/core/vdf.gd")
+const steamcmd_url := "https://steamcdn-a.akamaihd.net/client/installer/steamcmd_linux.tar.gz"
 
 enum STATE {
 	BOOT,
@@ -21,6 +22,7 @@ enum LOGIN_STATUS {
 	TFA_REQUIRED,
 }
 
+signal bootstrap_finished
 signal prompt_available
 signal client_ready
 signal command_finished(cmd: String, output: Array[String])
@@ -31,6 +33,8 @@ signal app_updated(app_id: String, success: bool)
 signal app_uninstalled(app_id: String, success: bool)
 signal install_progressed(app_id: String, current: int, total: int)
 
+var steamcmd_dir := "/".join([OS.get_environment("HOME"), ".steam", "steamcmd"])
+var steamcmd := "/".join([steamcmd_dir, "steamcmd.sh"])
 var proc: InteractiveProcess
 var state: STATE = STATE.BOOT
 var is_logged_in := false
@@ -45,11 +49,64 @@ var logger := Log.get_logger("SteamClient", Log.LEVEL.INFO)
 
 func _ready() -> void:
 	add_to_group("steam_client")
-	proc = InteractiveProcess.new("steamcmd", ["+@ShutdownOnFailedCommand", "0"])
+	bootstrap()
+
+
+# Bootstraps steamcmd if not found, and starts it up
+func bootstrap() -> void:
+	# Download and install steamcmd if not found 
+	if not FileAccess.file_exists(steamcmd):
+		logger.info("The steamcmd binary wasn't found. Trying to install it.")
+		var success = await install_steamcmd()
+		if success == false:
+			logger.error("Unable to install steamcmd")
+			bootstrap_finished.emit()
+			return
+		logger.info("Successfully installed steamcmd")
+
+	# Start steamcmd
+	proc = InteractiveProcess.new(steamcmd, ["+@ShutdownOnFailedCommand", "0"])
 	if proc.start() != OK:
 		logger.error("Unable to spawn steamcmd")
 		return
 	client_started = true
+	bootstrap_finished.emit()
+
+
+## Download steamcmd to the user directory
+func install_steamcmd() -> bool:
+	# Build the request
+	var http: HTTPRequest = HTTPRequest.new()
+	add_child(http)
+	if http.request(steamcmd_url) != OK:
+		logger.error("Error downloading steamcmd: " + steamcmd_url)
+		remove_child(http)
+		http.queue_free()
+		return false
+		
+	# Wait for the request signal to complete
+	# result: int, response_code: int, headers: PackedStringArray, body: PackedByteArray
+	var args: Array = await http.request_completed
+	var result: int = args[0]
+	var response_code: int = args[1]
+	var body: PackedByteArray = args[3]
+	remove_child(http)
+	http.queue_free()
+	
+	if result != HTTPRequest.RESULT_SUCCESS or response_code != 200:
+		logger.error("steamcmd couldn't be downloaded: " + steamcmd_url)
+		return false
+	
+	# Save the archive
+	var file := FileAccess.open("/tmp/steamcmd_linux.tar.gz", FileAccess.WRITE_READ)
+	file.store_buffer(body)
+
+	# Extract the archive
+	DirAccess.make_dir_recursive_absolute(steamcmd_dir)
+	var out := []
+	OS.execute("tar", ["xvfz", "/tmp/steamcmd_linux.tar.gz", "-C", steamcmd_dir], out)
+
+	return true
 
 
 ## Log in to Steam. This method will fire the 'logged_in' signal with the login 
@@ -288,6 +345,9 @@ func _queue_command(cmd: String) -> void:
 
 
 func _process(_delta: float) -> void:
+	if not proc:
+		return
+
 	# Process our command queue
 	_process_command_queue()
 
@@ -342,5 +402,7 @@ func _process_command_queue() -> void:
 
 
 func _exit_tree() -> void:
+	if not proc:
+		return
 	proc.send("quit\n")
 	proc.stop()

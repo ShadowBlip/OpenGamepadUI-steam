@@ -16,7 +16,7 @@ func _ready() -> void:
 
 	# Load the Steam client
 	steam = load("res://plugins/steam/core/steam_client.tscn").instantiate()
-	steam.ready.connect(_on_client_start)
+	steam.bootstrap_finished.connect(_on_client_start)
 	steam.client_ready.connect(_on_client_ready)
 	steam.logged_in.connect(_on_client_logged_in)
 	add_child(steam)
