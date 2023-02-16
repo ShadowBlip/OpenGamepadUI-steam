@@ -13,8 +13,6 @@ dist: build
 
 .PHONY: build
 build: $(PLUGINS_DIR)/$(PLUGIN_NAME)
-	@echo "Bundling script dependencies"
-	cd ./scripts/server && make
 	@echo "Exporting plugin package"
 	cd $(OPENGAMEPAD_UI_BASE) && $(MAKE) plugins
 
