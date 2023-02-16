@@ -22,6 +22,7 @@ enum LOGIN_STATUS {
 }
 
 signal prompt_available
+signal client_ready
 signal command_finished(cmd: String, output: Array[String])
 signal command_progressed(cmd: String, output: Array[String], finished: bool)
 signal logged_in(status: LOGIN_STATUS)
@@ -30,9 +31,10 @@ signal app_updated(app_id: String, success: bool)
 signal app_uninstalled(app_id: String, success: bool)
 signal install_progressed(app_id: String, current: int, total: int)
 
-var is_logged_in := false
 var proc: InteractiveProcess
 var state: STATE = STATE.BOOT
+var is_logged_in := false
+var client_started := false 
 
 var cmd_queue: Array[String] = []
 var current_cmd := ""
@@ -42,8 +44,12 @@ var logger := Log.get_logger("SteamClient", Log.LEVEL.DEBUG)
 
 
 func _ready() -> void:
+	add_to_group("steam_client")
 	proc = InteractiveProcess.new("steamcmd", ["+@ShutdownOnFailedCommand", "0"])
-	proc.start()
+	if proc.start() != OK:
+		logger.error("Unable to spawn steamcmd")
+		return
+	client_started = true
 
 
 ## Log in to Steam. This method will fire the 'logged_in' signal with the login 
@@ -308,6 +314,8 @@ func _process(_delta: float) -> void:
 
 	# Signal that a steamcmd prompt is available
 	if lines[-1].begins_with("Steam>"):
+		if state == STATE.BOOT:
+			client_ready.emit()
 		state = STATE.PROMPT
 		prompt_available.emit()
 
@@ -331,13 +339,6 @@ func _process_command_queue() -> void:
 	current_cmd = cmd
 	current_output.clear()
 	proc.send(cmd)
-
-
-func _input(event: InputEvent) -> void:
-	if event.is_action_released("ogui_east"):
-		proc.send("quit\n")
-		proc.stop()
-		get_tree().quit()
 
 
 func _exit_tree() -> void:
