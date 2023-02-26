@@ -8,6 +8,7 @@ extends Node
 
 const VDF = preload("res://plugins/steam/core/vdf.gd")
 const steamcmd_url := "https://steamcdn-a.akamaihd.net/client/installer/steamcmd_linux.tar.gz"
+const CACHE_DIR := "steam"
 
 enum STATE {
 	BOOT,
@@ -227,7 +228,13 @@ func get_available_apps() -> Array:
 
 
 ## Returns the app info for the given app
-func get_app_info(app_id: String) -> Dictionary:
+func get_app_info(app_id: String, cache_flags: int = Cache.FLAGS.LOAD | Cache.FLAGS.SAVE) -> Dictionary:
+	# Check to see if this app info is already cached
+	if cache_flags & Cache.FLAGS.LOAD and Cache.is_cached(CACHE_DIR, app_id):
+		logger.debug("Using cached app info result for app: " + app_id)
+		var cached := Cache.get_json(CACHE_DIR, app_id) as Dictionary
+		return cached
+
 	var cmd := " ".join(["app_info_print", app_id + "\n"])
 	var lines := await _wait_for_command(cmd)
 
@@ -255,6 +262,11 @@ func get_app_info(app_id: String) -> Dictionary:
 		logger.debug("Error parsing vdf output on line " + str(err_line) + ": " + vdf.get_error_message())
 		return {}
 	var app_info := vdf.get_data()
+
+	# Cache the result if we should save it
+	if cache_flags & Cache.FLAGS.SAVE:
+		Cache.save_json(CACHE_DIR, app_id, app_info)
+
 	return app_info
 
 
