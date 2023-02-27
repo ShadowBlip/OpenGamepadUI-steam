@@ -1,4 +1,4 @@
-extends Node
+extends NodeThread
 
 ## Godot interface for steamcmd
 ##
@@ -23,11 +23,14 @@ enum LOGIN_STATUS {
 	TFA_REQUIRED,
 }
 
-signal bootstrap_finished
-signal prompt_available
-signal client_ready
+# Steam thread signals
 signal command_finished(cmd: String, output: Array[String])
 signal command_progressed(cmd: String, output: Array[String], finished: bool)
+signal prompt_available
+
+# Main thread signals
+signal bootstrap_finished
+signal client_ready
 signal logged_in(status: LOGIN_STATUS)
 signal app_installed(app_id: String, success: bool)
 signal app_updated(app_id: String, success: bool)
@@ -50,6 +53,8 @@ var logger := Log.get_logger("SteamClient", Log.LEVEL.INFO)
 
 func _ready() -> void:
 	add_to_group("steam_client")
+	thread_group = ThreadGroup.new()
+	thread_group.name = "SteamClient"
 	bootstrap()
 
 
@@ -113,6 +118,10 @@ func install_steamcmd() -> bool:
 ## Log in to Steam. This method will fire the 'logged_in' signal with the login 
 ## status. This should be called again if TFA is required.
 func login(user: String, password := "", tfa := "") -> void:
+	await thread_group.exec(_login.bind(user, password, tfa))
+
+
+func _login(user: String, password := "", tfa := "") -> void:
 	# Build the command arguments
 	var cmd_args := [user]
 	if password != "":
@@ -165,11 +174,16 @@ func login(user: String, password := "", tfa := "") -> void:
 	var login_status := LOGIN_STATUS.FAILED 
 	if status.size() > 0:
 		login_status = status[-1]
-	logged_in.emit(login_status)
+	#logged_in.emit(login_status)
+	emit_signal.call_deferred("logged_in", login_status)
 
 
 ## Log the user out of Steam
 func logout() -> void:
+	await thread_group.exec(_logout)
+
+
+func _logout() -> void:
 	await _wait_for_command("logout\n")
 	is_logged_in = false
 
@@ -178,6 +192,10 @@ func logout() -> void:
 ## E.g. [{"id": "1779200", "name": "Thrive", "path": "~/.local/share/Steam/steamapps/common/Thrive"}]
 #steamcmd +login <user> +apps_installed +quit
 func get_installed_apps() -> Array[Dictionary]:
+	return await thread_group.exec(_get_installed_apps)
+
+
+func _get_installed_apps() -> Array[Dictionary]:
 	var lines := await _wait_for_command("apps_installed\n")
 	var apps: Array[Dictionary] = []
 	for line in lines:
@@ -200,6 +218,10 @@ func get_installed_apps() -> Array[Dictionary]:
 
 ## Returns an array of app ids available to the user
 func get_available_apps() -> Array:
+	return await thread_group.exec(_get_available_apps)
+
+
+func _get_available_apps() -> Array:
 	var app_ids := []
 	var lines := await _wait_for_command("licenses_print\n")
 	for line in lines:
@@ -229,6 +251,10 @@ func get_available_apps() -> Array:
 
 ## Returns the app info for the given app
 func get_app_info(app_id: String, cache_flags: int = Cache.FLAGS.LOAD | Cache.FLAGS.SAVE) -> Dictionary:
+	return await thread_group.exec(_get_app_info.bind(app_id, cache_flags))
+
+
+func _get_app_info(app_id: String, cache_flags: int = Cache.FLAGS.LOAD | Cache.FLAGS.SAVE) -> Dictionary:
 	# Check to see if this app info is already cached
 	if cache_flags & Cache.FLAGS.LOAD and Cache.is_cached(CACHE_DIR, app_id):
 		logger.debug("Using cached app info result for app: " + app_id)
@@ -274,20 +300,30 @@ func get_app_info(app_id: String, cache_flags: int = Cache.FLAGS.LOAD | Cache.FL
 ## show install progress and emit the 'app_installed' signal with the status 
 ## of the installation.
 func install(app_id: String) -> void:
-	var success := await _update(app_id)
-	app_installed.emit(app_id, success)
+	await thread_group.exec(_install.bind(app_id))
+
+
+func _install(app_id: String) -> void:
+	var success := await _install_update(app_id)
+	#app_installed.emit(app_id, success)
+	emit_signal.call_deferred("app_installed", app_id, success)
 
 
 ## Install the given app. This will emit the 'install_progressed' signal to 
 ## show install progress and emit the 'app_updated' signal with the status 
 ## of the installation.
 func update(app_id: String) -> void:
-	var success := await _update(app_id)
-	app_updated.emit(app_id, success)
+	await thread_group.exec(_update.bind(app_id))
+
+
+func _update(app_id: String) -> void:
+	var success := await _install_update(app_id)
+	#app_updated.emit(app_id, success)
+	emit_signal.call_deferred("app_updated", app_id, success)
 
 
 # Shared functionality between app install and app update
-func _update(app_id: String) -> bool:
+func _install_update(app_id: String) -> bool:
 	var cmd := "app_update " + app_id + "\n"
 	_queue_command(cmd)
 	var success := [] # Needs to be an array to be updated from lambda
@@ -321,8 +357,13 @@ func _update(app_id: String) -> bool:
 ## Uninstalls the given app. Will emit the 'app_uninstalled' signal when 
 ## completed.
 func uninstall(app_id: String) -> void:
+	await thread_group.exec(_uninstall.bind(app_id))
+
+
+func _uninstall(app_id: String) -> void:
 	await _wait_for_command("app_uninstall " + app_id + "\n")
-	app_uninstalled.emit(app_id, true)
+	#app_uninstalled.emit(app_id, true)
+	emit_signal.call_deferred("app_uninstalled", app_id, true)
 
 
 # Waits for the given command to finish running and returns the output as an 
@@ -356,7 +397,7 @@ func _queue_command(cmd: String) -> void:
 	cmd_queue.push_back(cmd)
 
 
-func _process(_delta: float) -> void:
+func _thread_process(_delta: float) -> void:
 	if not proc:
 		return
 
@@ -382,12 +423,13 @@ func _process(_delta: float) -> void:
 	# Signal when command progress has been made 
 	if current_cmd != "":
 		var out := lines.duplicate()
+		#emit_signal.call_deferred("command_progressed", current_cmd, out, false)
 		command_progressed.emit(current_cmd, out, false)
 
 	# Signal that a steamcmd prompt is available
 	if lines[-1].begins_with("Steam>"):
 		if state == STATE.BOOT:
-			client_ready.emit()
+			emit_signal.call_deferred("client_ready")
 		state = STATE.PROMPT
 		prompt_available.emit()
 
@@ -395,7 +437,9 @@ func _process(_delta: float) -> void:
 		if current_cmd == "":
 			return
 		var out := current_output.duplicate()
+		#emit_signal.call_deferred("command_progressed", current_cmd, [], true)
 		command_progressed.emit(current_cmd, [], true)
+		#emit_signal.call_deferred("command_finished", current_cmd, out)
 		command_finished.emit(current_cmd, out)
 		current_cmd = ""
 		current_output.clear()

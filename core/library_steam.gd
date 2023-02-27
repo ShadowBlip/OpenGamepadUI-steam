@@ -14,7 +14,7 @@ const _apps_cache_file: String = "apps.json"
 # Called when the node enters the scene tree for the first time.
 func _ready() -> void:
 	super()
-	logger = Log.get_logger("Steam", Log.LEVEL.INFO)
+	logger = Log.get_logger("Steam", Log.LEVEL.DEBUG)
 	logger.info("Steam Library loaded")
 	steam.logged_in.connect(_on_logged_in)
 
