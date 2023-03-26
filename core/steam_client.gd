@@ -53,7 +53,7 @@ var logger := Log.get_logger("SteamClient", Log.LEVEL.INFO)
 
 func _ready() -> void:
 	add_to_group("steam_client")
-	thread_group = ThreadGroup.new()
+	thread_group = SharedThread.new()
 	thread_group.name = "SteamClient"
 	bootstrap()
 

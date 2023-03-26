@@ -173,7 +173,7 @@ func _load_library(
 		item.provider_app_id = "{0}".format([app_id])
 		item.name = app_info[app_id]
 		item.command = "steam"
-		item.args = ["-silent", "steam://rungameid/" + item.provider_app_id]
+		item.args = ["-gamepadui", "-steamos3", "-steampal", "-steamdeck", "-silent", "steam://rungameid/" + item.provider_app_id]
 		item.tags = ["steam"]
 		item.installed = app_id in app_ids_installed
 		items.append(item)
