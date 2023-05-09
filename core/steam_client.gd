@@ -249,6 +249,56 @@ func _get_available_apps() -> Array:
 	return app_ids
 
 
+## Returns the status for the given app. E.g.
+## {"name": "Brotato", "install state": "Fully Installed,", "size on disk": ...}
+func get_app_status(app_id: String, cache_flags: int = Cache.FLAGS.LOAD | Cache.FLAGS.SAVE) -> Dictionary:
+	return await thread_group.exec(_get_app_status.bind(app_id, cache_flags))
+
+
+## Steam>app_status 1885690
+## AppID 1885690 (Virtual Circuit Board):
+##  - release state: released (Subscribed,Permanent,)
+##  - owner account: 35393203
+##  - install state: Fully Installed,
+##  - install dir: "/media/store/Steam/steamapps/common/Virtual Circuit Board"
+##  - mounted depots:
+##    1885692 : 49.37 MB (manifest 713640779874067696)
+##  - size on disk: 49365546 bytes, BuildID 10070869
+##  - update started: Wed Dec 31 16:00:00 1969, staged: 5/5 MB 100%, downloaded: 0/0 MB 0% - 0 KB/s
+##  - update state:  ( No Error )
+##  - user config: "UserConfig"
+## {
+##         "language"              "english"
+## }
+func _get_app_status(app_id: String, cache_flags: int = Cache.FLAGS.LOAD | Cache.FLAGS.SAVE) -> Dictionary:
+	# Check to see if this app status is already cached
+	var cache_key := ".".join([app_id, "status"])
+	if cache_flags & Cache.FLAGS.LOAD and Cache.is_cached(CACHE_DIR, cache_key):
+		logger.debug("Using cached app status result for app: " + app_id)
+		var cached := Cache.get_json(CACHE_DIR, cache_key) as Dictionary
+		return cached
+	
+	var cmd := " ".join(["app_status", app_id, "\n"])
+	var lines := await _wait_for_command(cmd)
+
+	# Parse the output of the command
+	var app_status := {}
+	for line in lines:
+		if line.begins_with("AppID "):
+			var name := line.split("(")[-1].split(")")[0].strip_edges()
+			app_status["name"] = name
+			continue
+		if line.begins_with(" - "):
+			var split_line := line.split(":", true, 1)
+			if split_line.size() < 2:
+				continue
+			var key := split_line[0].replace(" - ", "").strip_edges()
+			var value := split_line[1].strip_edges()
+			app_status[key] = value
+	
+	return app_status
+
+
 ## Returns the app info for the given app
 func get_app_info(app_id: String, cache_flags: int = Cache.FLAGS.LOAD | Cache.FLAGS.SAVE) -> Dictionary:
 	return await thread_group.exec(_get_app_info.bind(app_id, cache_flags))
@@ -329,7 +379,7 @@ func _install_update(app_id: String) -> bool:
 	var success := [] # Needs to be an array to be updated from lambda
 	var on_progress := func(output: Array):
 		# [" Update state (0x61) downloading, progress: 84.45 (1421013576 / 1682619731)", ""]
-		logger.debug("Install progress: " + str(output))
+		logger.info("Install progress: " + str(output))
 		for line in output:
 			if line.contains("Success! "):
 				success.append(true)
@@ -350,7 +400,7 @@ func _install_update(app_id: String) -> bool:
 			install_progressed.emit(app_id, bytes_cur, bytes_total)
 
 	await _follow_command(cmd, on_progress)
-	logger.debug("Install finished with success: " + str(true in success))
+	logger.info("Install finished with success: " + str(true in success))
 	return true in success
 
 
@@ -364,6 +414,44 @@ func _uninstall(app_id: String) -> void:
 	await _wait_for_command("app_uninstall " + app_id + "\n")
 	#app_uninstalled.emit(app_id, true)
 	emit_signal.call_deferred("app_uninstalled", app_id, true)
+
+
+## Set the platform type to install
+## Must be one of: [windows | macos | linux | android]
+func set_platform_type(type: String = "windows") -> void:
+	var cmd := func():
+		await _wait_for_command("@sSteamCmdForcePlatformType " + type + "\n")
+	await thread_group.exec(cmd)
+
+
+## Sets the install directory for the next game installed
+func set_install_directory(path: String, game_name: String) -> void:
+	path = "/".join([path, "steamapps", "common", game_name])
+	logger.info("Setting install path to: " + path)
+	var cmd := func():
+		await _wait_for_command("force_install_dir " + path + "\n")
+	await thread_group.exec(cmd)
+
+
+## Steam>library_folder_list
+## Index 0, ContentID 8720464880924330526, Path "/home/deck/.local/share/Steam", Label "", Disk Space 5.50 GB/499.59 GB, Apps 51, Mounted yes
+## Index 1, ContentID 3027826209726610080, Path "/run/media/mmcblk0p1", Label "", Disk Space 364.86 GB/1,006.64 GB, Apps 53, Mounted yes
+func get_library_folders() -> PackedStringArray:
+	var cmd := func():
+		await _wait_for_command("library_folder_list\n")
+	var folders := PackedStringArray()
+	var lines := await thread_group.exec(cmd) as Array[String]
+	for line in lines:
+		var parts := line.split(",")
+		for part in parts:
+			part = part.strip_edges()
+			if not part.contains("Path"):
+				continue
+			part = part.replace("Path \"", "")
+			part = part.replace("\"", "")
+			folders.append(part)
+			
+	return folders
 
 
 # Waits for the given command to finish running and returns the output as an 

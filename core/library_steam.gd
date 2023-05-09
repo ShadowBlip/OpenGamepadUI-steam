@@ -8,6 +8,8 @@ extends Library
 const SteamClient := preload("res://plugins/steam/core/steam_client.gd")
 const _apps_cache_file: String = "apps.json"
 
+var thread_pool := load("res://core/systems/threading/thread_pool.tres") as ThreadPool
+
 @onready var steam: SteamClient = get_tree().get_first_node_in_group("steam_client")
 
 
@@ -29,6 +31,11 @@ func install(item: LibraryLaunchItem) -> void:
 	# Start the install
 	var app_id := item.provider_app_id
 	logger.info("Installing " + item.name + " with app ID: " + app_id)
+	# Check if title supports Linux or Windows
+	if await _app_supports_linux(app_id):
+		await steam.set_platform_type("linux")
+	else:
+		await steam.set_platform_type("windows")
 	steam.install(app_id)
 
 	# Connect to progress updates
@@ -116,17 +123,20 @@ func _on_logged_in(status: SteamClient.LOGIN_STATUS):
 	# Upon login, fetch the user's library without loading it from cache and
 	# reconcile it with the library manager.
 	logger.info("Logged in. Updating library cache from Steam.")
-	var items: Array = await _load_library(Cache.FLAGS.SAVE)
+	var cmd := func():
+		return await _load_library(Cache.FLAGS.SAVE)
+	var items: Array = await thread_pool.exec(cmd)
 	for i in items:
 		var item: LibraryLaunchItem = i
-		# TODO: add/remove instead of reloading the whole library
 		if not LibraryManager.has_app(item.name):
-			var msg := "App {0} was not loaded. Reloading from cache"
-			logger.debug(msg.format([item.name]))
-			LibraryManager.reload_library()
-			return
+			var msg := "App {0} was not loaded. Adding item".format([item.name])
+			logger.info(msg)
+			LibraryManager.add_library_launch_item(library_id, item)
+		# TODO: Update installed status
+	
+	# TODO: Remove library items that have been deleted
 
-	logger.debug("Library is already up-to-date")
+	logger.info("Library is up-to-date")
 
 
 # Return a list of installed steam apps. Optionally caching flags can be passed to
@@ -160,7 +170,7 @@ func _load_library(
 	logger.info("Fetching Steam library...")
 	# Get all available apps
 	var app_ids: PackedInt64Array = await _get_available_apps()
-	var app_info: Dictionary = await _get_app_info(app_ids)
+	var app_info: Dictionary = await _get_games_from_app_info(app_ids)
 	var apps_installed: Array = await steam.get_installed_apps()
 	var app_ids_installed := PackedStringArray()
 	for app in apps_installed:
@@ -197,12 +207,23 @@ func _get_available_apps() -> Array:
 	return app_ids
 
 
+# Returns the app status for the given app ids
+func _get_app_status(app_ids: Array) -> Dictionary:
+	var app_status := {}
+	for app_id in app_ids:
+		var id := str(app_id)
+		var status := await steam.get_app_status(app_id)
+		app_status[app_id] = status
+	return app_status
+
+
 # Returns the app information for the given app ids
-func _get_app_info(app_ids: Array) -> Dictionary:
+func _get_games_from_app_info(app_ids: Array, caching_flags: int = Cache.FLAGS.LOAD | Cache.FLAGS.SAVE) -> Dictionary:
 	var app_info := {}
 	for app_id in app_ids:
 		var id := str(app_id)
-		var info := await steam.get_app_info(id)
+		var info := await _get_app_info(id, caching_flags)
+		
 		if not id in info:
 			continue
 		if not "common" in info[id]:
@@ -214,4 +235,32 @@ func _get_app_info(app_ids: Array) -> Dictionary:
 		if not "name" in info[id]["common"]:
 			continue
 		app_info[id] = info[id]["common"]["name"]
+		
 	return app_info
+
+
+## Returns the app info dictionary parsed from the VDF
+func _get_app_info(app_id: String, caching_flags: int = Cache.FLAGS.LOAD | Cache.FLAGS.SAVE) -> Dictionary:
+	# Load the app info from cache if requested
+	var cache_key := app_id + ".app_info"
+	if caching_flags & Cache.FLAGS.LOAD and Cache.is_cached(_cache_dir, cache_key):
+		return Cache.get_json(_cache_dir, cache_key)
+	else:
+		var info := await steam.get_app_info(app_id)
+		if caching_flags & Cache.FLAGS.SAVE:
+			Cache.save_json(_cache_dir, cache_key, info)
+		return info
+
+
+# Returns whether or not the given app id has a Linux binary
+func _app_supports_linux(app_id: String) -> bool:
+	var info := await _get_app_info(app_id)
+	if not app_id in info:
+		return false
+	if not "common" in info[app_id]:
+		return false
+	if not "oslist" in info[app_id]["common"]:
+		return false
+	var os_list := info[app_id]["common"]["oslist"].split(",") as Array
+	
+	return "linux" in os_list
