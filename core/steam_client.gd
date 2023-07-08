@@ -83,7 +83,8 @@ func bootstrap() -> void:
 func install_steamcmd() -> bool:
 	# Build the request
 	var http: HTTPRequest = HTTPRequest.new()
-	add_child(http)
+	add_child.call_deferred(http)
+	await http.ready
 	if http.request(steamcmd_url) != OK:
 		logger.error("Error downloading steamcmd: " + steamcmd_url)
 		remove_child(http)

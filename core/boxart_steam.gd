@@ -4,6 +4,7 @@ const _boxart_dir = "user://boxart/steam"
 const _supported_ext = [".jpg", ".png", ".jpeg"]
 
 @export var use_caching: bool = true
+var http_image := HTTPImageFetcher.new()
 
 # Maps the layout to a file suffix for caching
 var layout_map: Dictionary = {
@@ -34,6 +35,7 @@ func _ready() -> void:
 	super()
 	logger.info("Steam BoxArt provider loaded")
 	logger._level = Log.LEVEL.INFO
+	add_child(http_image)
 
 
 # Looks for boxart in the local user directory based on the app name
@@ -63,13 +65,9 @@ func get_boxart(item: LibraryItem, kind: LAYOUT) -> Texture2D:
 
 	# Try to fetch the artwork
 	logger.debug("Fetching steam box art for: " + item.name)
-	var http_image := HTTPImageFetcher.new()
-	add_child(http_image)
 	var url: String = layout_url_map[kind].format([steamAppID])
 	var texture: Texture2D = await http_image.fetch(url, cache_flags)
 	if texture == null:
 		logger.debug("Image couldn't be downloaded for: " + item.name)
-	remove_child(http_image)
-	http_image.queue_free()
-
+	
 	return texture
