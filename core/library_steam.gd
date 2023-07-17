@@ -159,7 +159,9 @@ func _load_library(
 			var items := [] as Array[LibraryLaunchItem]
 			for i in json_items:
 				var item: Dictionary = i
+				var launch_item := LibraryLaunchItem.from_dict(item)
 				items.append(LibraryLaunchItem.from_dict(item))
+				launch_item_added.emit(launch_item)
 			return items
 
 	# Wait for the steam client if it's not ready
@@ -175,21 +177,29 @@ func _load_library(
 	
 	# Get all available apps
 	var app_ids: PackedInt64Array = await get_available_apps()
-	var app_info: Dictionary = await get_apps_info(app_ids)
+
+	# Get installed apps
 	var apps_installed: Array = await steam.get_installed_apps()
 	var app_ids_installed := PackedStringArray()
 	for app in apps_installed:
 		app_ids_installed.append(app["id"])
 
-	# Generate launch items for each game
+	# Get the app info for each discovered game and create a launch item for
+	# it.
 	var items := [] as Array[LibraryLaunchItem]
-	for app_id in app_info.keys():
-		var info := app_info[app_id] as Dictionary
-		var item := _app_info_to_launch_item(info, app_id in app_ids_installed)
+	for app_id in app_ids:
+		var id := str(app_id)
+		var info := await get_app_info(id, caching_flags)
+		
+		if not id in info:
+			continue
+
+		var item := _app_info_to_launch_item(info, str(app_id) in app_ids_installed)
 		if not item:
-			logger.debug("Unable to create launch item for: " + app_id)
+			logger.debug("Unable to create launch item for: " + str(app_id))
 			continue
 		items.append(item)
+		launch_item_added.emit(item)
 
 	# Cache the discovered apps
 	if caching_flags & Cache.FLAGS.SAVE:
