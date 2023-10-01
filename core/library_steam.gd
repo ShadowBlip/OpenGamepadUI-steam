@@ -5,12 +5,15 @@ extends Library
 # Steam Overlay Config is in:
 # ~/.steam/steam/userdata/<user_id>/config/localconfig.vdf
 
+const VDF = preload("res://plugins/steam/core/vdf.gd")
 const SteamClient := preload("res://plugins/steam/core/steam_client.gd")
 const SteamAPIClient := preload("res://plugins/steam/core/steam_api_client.gd")
 const _apps_cache_file: String = "apps.json"
+const _local_apps_cache_file: String = "local_apps.json"
 
 var thread_pool := load("res://core/systems/threading/thread_pool.tres") as ThreadPool
 var steam_api_client := SteamAPIClient.new()
+var libraryfolders_path := "/".join([OS.get_environment("HOME"), ".steam/steam/steamapps/libraryfolders.vdf"])
 
 @onready var steam: SteamClient = get_tree().get_first_node_in_group("steam_client")
 
@@ -167,11 +170,11 @@ func _load_library(
 	# Wait for the steam client if it's not ready
 	if steam.state == steam.STATE.BOOT:
 		logger.info("Steam client is not ready yet.")
-		return []
+		return await _load_local_library(caching_flags)
 
 	if not steam.is_logged_in:
 		logger.info("Steam client is not logged in yet.")
-		return []
+		return await _load_local_library(caching_flags)
 
 	logger.info("Fetching Steam library...")
 	
@@ -210,6 +213,87 @@ func _load_library(
 			json_items.append(item.to_dict())
 		if Cache.save_json(_cache_dir, _apps_cache_file, json_items) != OK:
 			logger.warn("Unable to save Steam apps cache")
+
+	logger.info("Steam library loaded")
+
+	return items
+
+
+# Return a list of installed locally installed steam apps. Optionally caching 
+# flags can be passed to determine caching behavior.
+# Example:
+#   _load_local_library(Cache.FLAGS.LOAD|Cache.FLAGS.SAVE)
+func _load_local_library(
+	caching_flags: int = Cache.FLAGS.LOAD | Cache.FLAGS.SAVE
+) -> Array[LibraryLaunchItem]:
+	# Ensure there is a libraryfolders file
+	if not FileAccess.file_exists(libraryfolders_path):
+		logger.warn("The libraryfolders.vdf file was not found at: " + libraryfolders_path)
+		return []
+	
+	# Check to see if our library was cached. If it was, return the cached
+	# items.
+	if caching_flags & Cache.FLAGS.LOAD and Cache.is_cached(_cache_dir, _local_apps_cache_file):
+		var json_items = Cache.get_json(_cache_dir, _local_apps_cache_file)
+		if json_items != null:
+			logger.info("Local apps exist in cache. Using cache.")
+			var items := [] as Array[LibraryLaunchItem]
+			for i in json_items:
+				var item: Dictionary = i
+				var launch_item := LibraryLaunchItem.from_dict(item)
+				items.append(LibraryLaunchItem.from_dict(item))
+				launch_item_added.emit(launch_item)
+			return items
+
+	logger.info("Parsing local Steam library...")
+	var vdf_string := FileAccess.get_file_as_string(libraryfolders_path)
+	var vdf: VDF = VDF.new()
+	if vdf.parse(vdf_string) != OK:
+		var err_line := vdf.get_error_line()
+		logger.debug("Error parsing vdf output on line " + str(err_line) + ": " + vdf.get_error_message())
+		return []
+	var libraryfolders := vdf.get_data()
+	
+	# Parse the library folders
+	if not "libraryfolders" in libraryfolders:
+		return []
+	var app_ids := PackedStringArray()
+	var entries := libraryfolders["libraryfolders"] as Dictionary
+	for folder in entries.values():
+		if not "apps" in folder:
+			continue
+		var apps := folder["apps"] as Dictionary
+		for app_id in apps.keys():
+			app_ids.append(app_id)
+	
+	# Get the app info for each discovered game and create a launch item for
+	# it.
+	var items := [] as Array[LibraryLaunchItem]
+	for app_id in app_ids:
+		var id := str(app_id)
+		var info := await get_app_info(id, caching_flags)
+		
+		if not id in info:
+			continue
+
+		var item := _app_info_to_launch_item(info, true)
+		if not item:
+			logger.debug("Unable to create launch item for: " + str(app_id))
+			continue
+		items.append(item)
+		launch_item_added.emit(item)
+
+	# Cache the discovered apps
+	if caching_flags & Cache.FLAGS.SAVE:
+		logger.debug("Saving local apps to cache.")
+		var json_items := []
+		for i in items:
+			var item: LibraryLaunchItem = i
+			json_items.append(item.to_dict())
+		if Cache.save_json(_cache_dir, _local_apps_cache_file, json_items) != OK:
+			logger.warn("Unable to save Steam apps cache")
+
+	logger.info("Local Steam library loaded")
 
 	return items
 
