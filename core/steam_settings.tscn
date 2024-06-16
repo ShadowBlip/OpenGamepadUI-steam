@@ -3,33 +3,23 @@
 [ext_resource type="Script" path="res://plugins/steam/core/steam_settings.gd" id="1_482tk"]
 [ext_resource type="PackedScene" uid="uid://d1hlp6c8wrqgv" path="res://core/ui/components/status.tscn" id="2_xf1mt"]
 [ext_resource type="PackedScene" uid="uid://d1rjdfxxrdccf" path="res://core/ui/components/text_input.tscn" id="3_d62ly"]
-[ext_resource type="PackedScene" uid="uid://df5o1o2dsik84" path="res://core/ui/components/button.tscn" id="4_5dgjq"]
+[ext_resource type="PackedScene" uid="uid://c71ayw7pcw6u6" path="res://core/ui/components/card_button.tscn" id="4_jlnf0"]
 
-[node name="SteamSettings" type="ScrollContainer"]
+[node name="MarginContainer" type="MarginContainer"]
 anchors_preset = 15
 anchor_right = 1.0
 anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
-size_flags_horizontal = 3
-size_flags_vertical = 3
-follow_focus = true
 script = ExtResource("1_482tk")
 
-[node name="MarginContainer" type="MarginContainer" parent="."]
+[node name="ContentContainer" type="VBoxContainer" parent="."]
 layout_mode = 2
 size_flags_horizontal = 3
-theme_override_constants/margin_left = 5
-theme_override_constants/margin_top = 5
-theme_override_constants/margin_right = 5
-theme_override_constants/margin_bottom = 5
-
-[node name="ContentContainer" type="VBoxContainer" parent="MarginContainer"]
-layout_mode = 2
-size_flags_vertical = 3
+size_flags_vertical = 0
 theme_override_constants/separation = 10
 
-[node name="Status" parent="MarginContainer/ContentContainer" instance=ExtResource("2_xf1mt")]
+[node name="Status" parent="ContentContainer" instance=ExtResource("2_xf1mt")]
 unique_name_in_owner = true
 layout_mode = 2
 title = "Status"
@@ -37,37 +27,37 @@ description = ""
 status = 2
 color = "red"
 
-[node name="ConnectedStatus" parent="MarginContainer/ContentContainer" instance=ExtResource("2_xf1mt")]
+[node name="ConnectedStatus" parent="ContentContainer" instance=ExtResource("2_xf1mt")]
 unique_name_in_owner = true
 layout_mode = 2
 title = "Connected"
 description = ""
 color = "gray"
 
-[node name="LoggedInStatus" parent="MarginContainer/ContentContainer" instance=ExtResource("2_xf1mt")]
+[node name="LoggedInStatus" parent="ContentContainer" instance=ExtResource("2_xf1mt")]
 unique_name_in_owner = true
 layout_mode = 2
 title = "Logged In"
 description = ""
 color = "gray"
 
-[node name="HSeparator" type="HSeparator" parent="MarginContainer/ContentContainer"]
+[node name="HSeparator" type="HSeparator" parent="ContentContainer"]
 layout_mode = 2
 
-[node name="UsernameTextInput" parent="MarginContainer/ContentContainer" instance=ExtResource("3_d62ly")]
+[node name="UsernameTextInput" parent="ContentContainer" instance=ExtResource("3_d62ly")]
 unique_name_in_owner = true
 layout_mode = 2
 title = "Username"
 description = ""
 
-[node name="PasswordTextInput" parent="MarginContainer/ContentContainer" instance=ExtResource("3_d62ly")]
+[node name="PasswordTextInput" parent="ContentContainer" instance=ExtResource("3_d62ly")]
 unique_name_in_owner = true
 layout_mode = 2
 title = "Password"
 description = ""
 secret = true
 
-[node name="TFATextInput" parent="MarginContainer/ContentContainer" instance=ExtResource("3_d62ly")]
+[node name="TFATextInput" parent="ContentContainer" instance=ExtResource("3_d62ly")]
 unique_name_in_owner = true
 visible = false
 layout_mode = 2
@@ -75,10 +65,10 @@ title = "SteamGuard Code"
 description = "Enter your Steam Guard code to continue"
 secret = true
 
-[node name="HSeparatorLogin" type="HSeparator" parent="MarginContainer/ContentContainer"]
+[node name="HSeparatorLogin" type="HSeparator" parent="ContentContainer"]
 layout_mode = 2
 
-[node name="LoginButton" parent="MarginContainer/ContentContainer" instance=ExtResource("4_5dgjq")]
+[node name="LoginButton" parent="ContentContainer" instance=ExtResource("4_jlnf0")]
 unique_name_in_owner = true
 layout_mode = 2
 text = "Login"

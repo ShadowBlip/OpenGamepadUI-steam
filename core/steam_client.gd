@@ -39,10 +39,11 @@ signal install_progressed(app_id: String, current: int, total: int)
 
 var steamcmd_dir := "/".join([OS.get_environment("HOME"), ".steam", "steamcmd"])
 var steamcmd := "/".join([steamcmd_dir, "steamcmd.sh"])
+var steamcmd_stderr: FileAccess
 var proc: InteractiveProcess
 var state: STATE = STATE.BOOT
 var is_logged_in := false
-var client_started := false 
+var client_started := false
 
 var cmd_queue: Array[String] = []
 var current_cmd := ""
@@ -496,6 +497,16 @@ func _thread_process(_delta: float) -> void:
 	# Read the output from the process
 	var output := proc.read()
 
+	# Also read output from the stderr file
+	if steamcmd_stderr:
+		#logger.debug("steamcmd-stderr: Current position:", steamcmd_stderr.get_position(), "Current size:", steamcmd_stderr.get_length())
+		var remaining_data := steamcmd_stderr.get_length() - steamcmd_stderr.get_position()
+		if remaining_data > 0:
+			var data := steamcmd_stderr.get_buffer(remaining_data)
+			var stderr := data.get_string_from_utf8()
+			logger.debug("steamcmd-stderr: " + stderr)
+			output += stderr
+
 	# Return if there is no output from the process
 	if output == "":
 		return
@@ -508,6 +519,29 @@ func _thread_process(_delta: float) -> void:
 	if not current_cmd.begins_with("login"):
 		for line in lines:
 			logger.debug("steamcmd: " + line)
+
+	# Wait for "Redirecting stderr to" to open stderr file.
+	# Because of new behavior as of ~2024-06, steamcmd outputs stderr to a file
+	# instead of to normal stderr.
+	if not steamcmd_stderr:
+		for line in lines:
+			if not line.begins_with("Redirecting stderr to"):
+				continue
+
+			# Parse the line:
+			# Redirecting stderr to '/home/<user>/.local/share/Steam/logs/stderr.txt'
+			var parts := line.split("'")
+			if parts.size() < 2:
+				logger.error("Unable to parse stderr path for line: " + line)
+				break
+			var stderr_path := parts[1]
+
+			# Open the stderr file
+			steamcmd_stderr = FileAccess.open(stderr_path, FileAccess.READ)
+			if not steamcmd_stderr:
+				logger.error("Unable to open steamcmd stderr: " + str(FileAccess.get_open_error()))
+				break
+			logger.debug("Opened steamcmd stderr file: " + stderr_path)
 
 	# Signal when command progress has been made 
 	if current_cmd != "":

@@ -1,13 +1,14 @@
 extends Plugin
 
 const SteamClient := preload("res://plugins/steam/core/steam_client.gd")
-const SettingsManager := preload("res://core/global/settings_manager.tres")
-const NotificationManager := preload("res://core/global/notification_manager.tres")
-const settings_menu := preload("res://plugins/steam/core/steam_settings.tscn")
-const icon := preload("res://plugins/steam/assets/steam.svg")
+
+var settings_manager := load("res://core/global/settings_manager.tres") as SettingsManager
+var notification_manager := load("res://core/global/notification_manager.tres") as NotificationManager
+var settings_menu := load("res://plugins/steam/core/steam_settings.tscn") as PackedScene
+var icon := preload("res://plugins/steam/assets/steam.svg")
 
 var steam: SteamClient
-var user := SettingsManager.get_value("plugin.steam", "user", "") as String
+var user := settings_manager.get_value("plugin.steam", "user", "") as String
 
 
 # Called when the node enters the scene tree for the first time.
@@ -41,7 +42,7 @@ func _on_client_start():
 		var notify := Notification.new("Unable to start steam client")
 		notify.icon = icon
 		logger.error(notify.text)
-		NotificationManager.show(notify)
+		notification_manager.show(notify)
 		return
 
 
@@ -52,7 +53,7 @@ func _on_client_ready():
 		var notify := Notification.new("Steam login required")
 		notify.icon = icon
 		logger.info(notify.text)
-		NotificationManager.show(notify)
+		notification_manager.show(notify)
 		return
 
 	# If we have logged in before, try logging in with saved credentials

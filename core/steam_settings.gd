@@ -1,14 +1,14 @@
 extends Control
 
 const SteamClient := preload("res://plugins/steam/core/steam_client.gd")
-const SettingsManager := preload("res://core/global/settings_manager.tres")
-const NotificationManager := preload("res://core/global/notification_manager.tres")
+var settings_manager := load("res://core/global/settings_manager.tres") as SettingsManager
+var notification_manager := load("res://core/global/notification_manager.tres") as NotificationManager
 const icon := preload("res://plugins/steam/assets/steam.svg")
 
 @onready var status := $%Status
 @onready var connected_status := $%ConnectedStatus
 @onready var logged_in_status := $%LoggedInStatus
-@onready var user_box := $%UsernameTextInput as ComponentTextInput
+@onready var user_box := $%UsernameTextInput
 @onready var pass_box := $%PasswordTextInput
 @onready var tfa_box := $%TFATextInput
 @onready var login_button := $%LoginButton
@@ -18,7 +18,7 @@ const icon := preload("res://plugins/steam/assets/steam.svg")
 # Called when the node enters the scene tree for the first time.
 func _ready() -> void:
 	# If we have logged in before, populate the username box
-	var user := SettingsManager.get_value("plugin.steam", "user", "") as String
+	var user := settings_manager.get_value("plugin.steam", "user", "") as String
 	user_box.text = user
 
 	# Set the status label based on the steam client status
@@ -74,12 +74,22 @@ func _on_login(login_status: SteamClient.LOGIN_STATUS) -> void:
 	if login_status == SteamClient.LOGIN_STATUS.TFA_REQUIRED:
 		tfa_box.visible = true
 		tfa_box.grab_focus.call_deferred()
+
+		var notify := Notification.new("Two-factor authentication required")
+		notify.icon = icon
+		notification_manager.show(notify)
+
 		return
 
 	# If we logged, woo!
 	if login_status == SteamClient.LOGIN_STATUS.OK:
 		logged_in_status.status = logged_in_status.STATUS.CLOSED
 		logged_in_status.color = "green"
+		
+		var notify := Notification.new("Successfully logged in to Steam")
+		notify.icon = icon
+		notification_manager.show(notify)
+		
 		return
 
 
@@ -88,5 +98,5 @@ func _on_login_button() -> void:
 	var username: String = user_box.text
 	var password: String = pass_box.text
 	var tfa_code: String = tfa_box.text
-	SettingsManager.set_value("plugin.steam", "user", username)
+	settings_manager.set_value("plugin.steam", "user", username)
 	steam.login(username, password, tfa_code)
