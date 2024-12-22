@@ -6,7 +6,6 @@ extends NodeThread
 ## [InteractiveProcess] to spawn steamcmd in a psuedo terminal to read and write 
 ## to its stdout/stdin.
 
-const VDF = preload("res://plugins/steam/core/vdf.gd")
 const steamcmd_url := "https://steamcdn-a.akamaihd.net/client/installer/steamcmd_linux.tar.gz"
 const CACHE_DIR := "steam"
 
@@ -37,13 +36,18 @@ signal app_updated(app_id: String, success: bool)
 signal app_uninstalled(app_id: String, success: bool)
 signal install_progressed(app_id: String, current: int, total: int)
 
-var steamcmd_dir := "/".join([OS.get_environment("HOME"), ".steam", "steamcmd"])
+var network_manager := load("res://core/systems/network/network_manager.tres") as NetworkManagerInstance
+var steamcmd_dir := "/".join([OS.get_environment("HOME"), ".local", "share", "Steam"])
 var steamcmd := "/".join([steamcmd_dir, "steamcmd.sh"])
+var vdf_local_path := "/".join([steamcmd_dir, "local.vdf"])
+var vdf_config_path := "/".join([steamcmd_dir, "config", "config.vdf"])
+var tokens_save_path := "/".join([steamcmd_dir, "config", "steamcmd-tokens.json"])
 var steamcmd_stderr: FileAccess
 var proc: InteractiveProcess
 var state: STATE = STATE.BOOT
 var is_logged_in := false
 var client_started := false
+var is_app_installing := false
 
 var cmd_queue: Array[String] = []
 var current_cmd := ""
@@ -61,11 +65,13 @@ func _ready() -> void:
 
 # Bootstraps steamcmd if not found, and starts it up
 func bootstrap() -> void:
+	# Wait for an active internet connection
+	await wait_for_network()
+	
 	# Download and install steamcmd if not found 
 	if not FileAccess.file_exists(steamcmd):
 		logger.info("The steamcmd binary wasn't found. Trying to install it.")
-		var success = await install_steamcmd()
-		if success == false:
+		if not await install_steamcmd():
 			logger.error("Unable to install steamcmd")
 			bootstrap_finished.emit()
 			return
@@ -78,6 +84,17 @@ func bootstrap() -> void:
 		return
 	client_started = true
 	bootstrap_finished.emit()
+
+
+## Waits until the local machine can resolve valvesoftware.com
+func wait_for_network() -> void:
+	var network_state := network_manager.NM_STATE_UNKNOWN
+	while network_state != network_manager.NM_STATE_CONNECTED_GLOBAL:
+		logger.debug("Waiting for network connection...")
+		network_state = network_manager.state
+		await get_tree().create_timer(5.0).timeout
+
+	logger.debug("Connected to the internet")
 
 
 ## Download steamcmd to the user directory
@@ -113,6 +130,22 @@ func install_steamcmd() -> bool:
 	DirAccess.make_dir_recursive_absolute(steamcmd_dir)
 	var out := []
 	OS.execute("tar", ["xvfz", "/tmp/steamcmd_linux.tar.gz", "-C", steamcmd_dir], out)
+
+	# Check if ~/Steam exists
+	var home := DirAccess.open(OS.get_environment("HOME"))
+	if not home:
+		logger.error("Home directory not found, wtf")
+		return false
+	if home.dir_exists("Steam") and not home.is_link("Steam"):
+		logger.warn("steamcmd data folder already exists, but is not a symlink")
+		logger.warn("Backing up ~/Steam to ~/Steam.bak...")
+		if home.rename("Steam", "Steam.bak") != OK:
+			logger.warn("Failed to back up ~/Steam to ~/Steam.bak")
+			return false
+	if not home.dir_exists("Steam"):
+		logger.info("Creating symlink for steamcmd")
+		if home.create_link(steamcmd_dir, "Steam") != OK:
+			logger.error("Failed to create symlink for steamcmd")
 
 	return true
 
@@ -178,6 +211,232 @@ func _login(user: String, password := "", tfa := "") -> void:
 		login_status = status[-1]
 	#logged_in.emit(login_status)
 	emit_signal.call_deferred("logged_in", login_status)
+
+
+## Copies the current steamcmd login token(s) from $STEAM_ROOT/config/config.vdf
+## to $STEAM_ROOT/config/steamcmd-tokens.json
+func save_steamcmd_session() -> void:
+	logger.info("Saving steamcmd login session")
+	if not FileAccess.file_exists(vdf_config_path):
+		logger.warn("config.vdf does not exist at:", vdf_config_path, ". Unable to save login session.")
+		return
+	var config_vdf := FileAccess.get_file_as_string(vdf_config_path)
+	if config_vdf.is_empty():
+		logger.warn("config.vdf at", vdf_config_path, "is empty. Unable to save login session.")
+		return
+	var vdf := Vdf.new()
+	if vdf.parse(config_vdf) != OK:
+		logger.warn("Failed to parse", vdf_config_path, ":", vdf.get_error_message())
+		return
+	logger.trace("Successfully parsed config:", vdf.data)
+
+	# Validate the structure. Sometimes these keys can be in lowercase or uppercase.
+	var config_key := "InstallConfigStore"
+	if "installconfigstore" in vdf.data:
+		config_key = "installconfigstore"
+	if not config_key in vdf.data:
+		logger.warn("Failed to find key 'InstallConfigStore' in", vdf_config_path)
+		return
+	var software_key := "Software"
+	if "software" in vdf.data[config_key]:
+		software_key = "software"
+	if not software_key in vdf.data[config_key]:
+		logger.warn("Failed to find key 'Software' in", vdf_config_path)
+		return
+	var valve_key := "Valve"
+	if "valve" in vdf.data[config_key][software_key]:
+		valve_key = "valve"
+	if not valve_key in vdf.data[config_key][software_key]:
+		logger.warn("Failed to find key 'Valve' in", vdf_config_path)
+		return
+	var steam_key := "Steam"
+	if "steam" in vdf.data[config_key][software_key][valve_key]:
+		steam_key = "steam"
+	if not steam_key in vdf.data[config_key][software_key][valve_key]:
+		logger.warn("Failed to find key 'Steam' in", vdf_config_path)
+		return
+	var cache_key := "ConnectCache"
+	if "connectcache" in vdf.data[config_key][software_key][valve_key][steam_key]:
+		cache_key = "connectcache"
+	if not cache_key in vdf.data[config_key][software_key][valve_key][steam_key]:
+		logger.warn("Failed to find key 'ConnectCache' in", vdf_config_path)
+		return
+	var tokens := vdf.data[config_key][software_key][valve_key][steam_key][cache_key] as Dictionary
+	if tokens.is_empty():
+		logger.warn("No login sessions found in", vdf_config_path)
+		return
+	
+	# Store the tokens as JSON
+	var json_data := JSON.stringify(tokens)
+	var file := FileAccess.open(tokens_save_path, FileAccess.WRITE_READ)
+	if not file:
+		logger.warn("Unable to open", tokens_save_path, "to save login session.")
+		return
+	file.store_string(json_data)
+	logger.debug("Successfully saved steamcmd session to", tokens_save_path)
+
+
+## Configures Steam to enable proton for all games
+func enable_proton() -> void:
+	if not FileAccess.file_exists(vdf_config_path):
+		logger.warn("config.vdf does not exist at:", vdf_config_path, ". Unable to enable proton.")
+		return
+	var config_vdf := FileAccess.get_file_as_string(vdf_config_path)
+	if config_vdf.is_empty():
+		logger.warn("config.vdf at", vdf_config_path, "is empty. Unable to enable proton.")
+		return
+	var vdf := Vdf.new()
+	if vdf.parse(config_vdf) != OK:
+		logger.warn("Failed to parse", vdf_config_path, ":", vdf.get_error_message())
+		return
+	logger.trace("Successfully parsed config:", vdf.data)
+
+	# Validate the structure. Sometimes these keys can be in lowercase or uppercase.
+	var config_key := "InstallConfigStore"
+	if "installconfigstore" in vdf.data:
+		config_key = "installconfigstore"
+	if not config_key in vdf.data:
+		logger.warn("Failed to find key 'InstallConfigStore' in", vdf_config_path)
+		return
+	var software_key := "Software"
+	if "software" in vdf.data[config_key]:
+		software_key = "software"
+	if not software_key in vdf.data[config_key]:
+		logger.warn("Failed to find key 'Software' in", vdf_config_path)
+		return
+	var valve_key := "Valve"
+	if "valve" in vdf.data[config_key][software_key]:
+		valve_key = "valve"
+	if not valve_key in vdf.data[config_key][software_key]:
+		logger.warn("Failed to find key 'Valve' in", vdf_config_path)
+		return
+	var steam_key := "Steam"
+	if "steam" in vdf.data[config_key][software_key][valve_key]:
+		steam_key = "steam"
+	if not steam_key in vdf.data[config_key][software_key][valve_key]:
+		logger.warn("Failed to find key 'Steam' in", vdf_config_path)
+		return
+	
+	# Check to see if the setting is already enabled
+	var compat_key := "CompatToolMapping"
+	if "compattoolmapping" in vdf.data[config_key][software_key][valve_key][steam_key]:
+		compat_key = "compattoolmapping"
+	var compat_mapping := {}
+	if compat_key in vdf.data[config_key][software_key][valve_key][steam_key]:
+		logger.debug("CompatToolMapping exists in config.vdf")
+		if "0" in vdf.data[config_key][software_key][valve_key][steam_key][compat_key]:
+			logger.debug("Proton already enabled")
+			return
+		compat_mapping = vdf.data[config_key][software_key][valve_key][steam_key][compat_key]
+	
+	# Add the entry to enable proton for all games
+	compat_mapping["0"] = {
+		"name": "proton_experimental",
+		"config": "",
+		"priority": "75",
+	}
+	var data := vdf.data
+	data[config_key][software_key][valve_key][steam_key][compat_key] = compat_mapping
+	
+	# Save the config
+	logger.info("Enabling proton compatibility tool for all games")
+	var serialized := Vdf.stringify(data)
+	if serialized.is_empty():
+		logger.warn("Failed to enable proton. Unable to serialize config.vdf")
+		return
+	var file := FileAccess.open(vdf_config_path, FileAccess.WRITE)
+	file.store_string(serialized)
+
+
+## Returns true if a previous steamcmd login session has been saved
+func has_steamcmd_session() -> bool:
+	return FileAccess.file_exists(tokens_save_path)
+
+
+## Restores the saved login session
+func restore_steamcmd_session() -> int:
+	logger.info("Restoring steamcmd login session")
+
+	# Load the saved session
+	if not has_steamcmd_session():
+		logger.error("No saved steamcmd session exists. Unable to restore session.")
+		return ERR_DOES_NOT_EXIST
+	var session_data := FileAccess.get_file_as_string(tokens_save_path)
+	var json := JSON.new()
+	if json.parse(session_data) != OK:
+		logger.error("Failed to parse session data from", tokens_save_path, "with error:", json.get_error_message())
+		return ERR_PARSE_ERROR
+	if not json.data is Dictionary:
+		logger.error("Failed to get session data from", tokens_save_path, ". Data is not a Dictionary.")
+		return ERR_PARSE_ERROR
+	var session := json.data as Dictionary
+
+	# Load Steam's config.vdf
+	if not FileAccess.file_exists(vdf_config_path):
+		logger.warn("config.vdf does not exist at:", vdf_config_path, ". Unable to restore login session.")
+		return ERR_DOES_NOT_EXIST
+	var config_vdf := FileAccess.get_file_as_string(vdf_config_path)
+	if config_vdf.is_empty():
+		logger.warn("config.vdf at", vdf_config_path, "is empty. Unable to restore login session.")
+		return ERR_PARSE_ERROR
+	var vdf := Vdf.new()
+	if vdf.parse(config_vdf) != OK:
+		logger.warn("Failed to parse", vdf_config_path, ":", vdf.get_error_message())
+		return ERR_PARSE_ERROR
+	logger.trace("Successfully parsed config:", vdf.data)
+
+	# Validate the structure. Sometimes these keys can be in lowercase or uppercase.
+	var config_key := "InstallConfigStore"
+	if "installconfigstore" in vdf.data:
+		config_key = "installconfigstore"
+	if not config_key in vdf.data:
+		logger.warn("Failed to find key 'InstallConfigStore' in", vdf_config_path)
+		return ERR_PARSE_ERROR
+	var software_key := "Software"
+	if "software" in vdf.data[config_key]:
+		software_key = "software"
+	if not software_key in vdf.data[config_key]:
+		logger.warn("Failed to find key 'Software' in", vdf_config_path)
+		return ERR_PARSE_ERROR
+	var valve_key := "Valve"
+	if "valve" in vdf.data[config_key][software_key]:
+		valve_key = "valve"
+	if not valve_key in vdf.data[config_key][software_key]:
+		logger.warn("Failed to find key 'Valve' in", vdf_config_path)
+		return ERR_PARSE_ERROR
+	var steam_key := "Steam"
+	if "steam" in vdf.data[config_key][software_key][valve_key]:
+		steam_key = "steam"
+	if not steam_key in vdf.data[config_key][software_key][valve_key]:
+		logger.warn("Failed to find key 'Steam' in", vdf_config_path)
+		return ERR_PARSE_ERROR
+	var cache_key := "ConnectCache"
+	if "connectcache" in vdf.data[config_key][software_key][valve_key][steam_key]:
+		cache_key = "connectcache"
+	if not cache_key in vdf.data[config_key][software_key][valve_key][steam_key]:
+		logger.warn("Failed to find key 'ConnectCache' in", vdf_config_path)
+		return ERR_PARSE_ERROR
+
+	# Update the connection cache with the saved session
+	vdf.data[config_key][software_key][valve_key][steam_key][cache_key] = session
+
+	# Serialize the dictionary back into VDF
+	var config_data := Vdf.stringify(vdf.data)
+	if config_data.is_empty():
+		logger.warn("Failed to serialize config.vdf")
+		return ERR_INVALID_DATA
+
+	# Save the updated config
+	var config_file := FileAccess.open(vdf_config_path, FileAccess.WRITE_READ)
+	config_file.store_string(config_data)
+
+	return OK
+
+
+## Returns true if the Steam client has been detected to have launched before.
+func has_steam_run() -> bool:
+	var folder_to_check := "/".join([steamcmd_dir, "ubuntu12_64"])
+	return DirAccess.dir_exists_absolute(folder_to_check)
 
 
 ## Log the user out of Steam
@@ -334,10 +593,9 @@ func _get_app_info(app_id: String, cache_flags: int = Cache.FLAGS.LOAD | Cache.F
 			break
 
 	# Parse the VDF output
-	var vdf: VDF = VDF.new()
+	var vdf := Vdf.new()
 	if vdf.parse(vdf_string) != OK:
-		var err_line := vdf.get_error_line()
-		logger.debug("Error parsing vdf output on line " + str(err_line) + ": " + vdf.get_error_message())
+		logger.debug("Error parsing vdf: " + vdf.get_error_message())
 		return {}
 	var app_info := vdf.get_data()
 
@@ -351,12 +609,12 @@ func _get_app_info(app_id: String, cache_flags: int = Cache.FLAGS.LOAD | Cache.F
 ## Install the given app. This will emit the 'install_progressed' signal to 
 ## show install progress and emit the 'app_installed' signal with the status 
 ## of the installation.
-func install(app_id: String) -> void:
-	await thread_group.exec(_install.bind(app_id))
+func install(app_id: String, path: String = "") -> void:
+	await thread_group.exec(_install.bind(app_id, path))
 
 
-func _install(app_id: String) -> void:
-	var success := await _install_update(app_id)
+func _install(app_id: String, path: String = "") -> void:
+	var success := await _install_update(app_id, path)
 	#app_installed.emit(app_id, success)
 	emit_signal.call_deferred("app_installed", app_id, success)
 
@@ -375,7 +633,13 @@ func _update(app_id: String) -> void:
 
 
 # Shared functionality between app install and app update
-func _install_update(app_id: String) -> bool:
+func _install_update(app_id: String, path: String = "") -> bool:
+	is_app_installing = true
+	
+	# TODO: FIXME
+	#if not path.is_empty():
+	#	var lines := await _wait_for_command("force_install_dir " + path + "\n")
+	
 	var cmd := "app_update " + app_id + "\n"
 	_queue_command(cmd)
 	var success := [] # Needs to be an array to be updated from lambda
@@ -403,6 +667,7 @@ func _install_update(app_id: String) -> bool:
 
 	await _follow_command(cmd, on_progress)
 	logger.info("Install finished with success: " + str(true in success))
+	is_app_installing = false
 	return true in success
 
 

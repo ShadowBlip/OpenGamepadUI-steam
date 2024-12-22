@@ -5,7 +5,6 @@ extends Library
 # Steam Overlay Config is in:
 # ~/.steam/steam/userdata/<user_id>/config/localconfig.vdf
 
-const VDF = preload("res://plugins/steam/core/vdf.gd")
 const SteamClient := preload("res://plugins/steam/core/steam_client.gd")
 const SteamAPIClient := preload("res://plugins/steam/core/steam_api_client.gd")
 const _apps_cache_file: String = "apps.json"
@@ -22,27 +21,102 @@ var libraryfolders_path := "/".join([OS.get_environment("HOME"), ".steam/steam/s
 func _ready() -> void:
 	super()
 	add_child(steam_api_client)
+	thread_pool.start()
 	logger = Log.get_logger("Steam", Log.LEVEL.DEBUG)
 	logger.info("Steam Library loaded")
 	steam.logged_in.connect(_on_logged_in)
 
 
-# Return a list of installed steam apps. Called by the LibraryManager.
+## Return a list of installed steam apps. Called by the LibraryManager.
 func get_library_launch_items() -> Array[LibraryLaunchItem]:
 	return await _load_library(Cache.FLAGS.LOAD | Cache.FLAGS.SAVE)
 
 
-# Installs the given library item.
-func install(item: LibraryLaunchItem) -> void:
-	# Start the install
+## Returns an array of available install locations for this library provider.
+func get_available_install_locations(item: LibraryLaunchItem = null) -> Array[InstallLocation]:
+	var locations: Array[InstallLocation] = []
+
+	# Parse libraryfolder.vdf for any extra volumes that are available.
+	if not FileAccess.file_exists(libraryfolders_path):
+		logger.warn("The libraryfolders.vdf file was not found at: " + libraryfolders_path)
+		return locations
+
+	var vdf_string := FileAccess.get_file_as_string(libraryfolders_path)
+	var vdf := Vdf.new()
+	if vdf.parse(vdf_string) != OK:
+		logger.debug("Error parsing vdf: " + vdf.get_error_message())
+		return locations
+	var libraryfolders := vdf.get_data()
+
+	if not "libraryfolders" in libraryfolders:
+		return locations
+	var app_ids := PackedStringArray()
+	var entries := libraryfolders["libraryfolders"] as Dictionary
+	for folder in entries.values():
+		if not "path" in folder:
+			continue
+		var path := folder["path"] as String
+		if not DirAccess.dir_exists_absolute(path):
+			continue
+		var location := Library.InstallLocation.new()
+		location.id = path
+		location.name = path
+		location.total_space_mb = 0 # TODO: calculate space
+		location.free_space_mb = 0
+		locations.append(location)
+
+	return locations
+
+
+## Returns an array of install options for the given [LibraryLaunchItem].
+## Install options are arbitrary and are provider-specific. They allow the user
+## to select things like the language of a game to install, etc.
+func get_install_options(item: LibraryLaunchItem) -> Array[InstallOption]:
 	var app_id := item.provider_app_id
-	logger.info("Installing " + item.name + " with app ID: " + app_id)
+	var options: Array[InstallOption] = []
+
+	var platform_option := InstallOption.new()
+	platform_option.id = "os"
+	platform_option.name = "Platform"
+	platform_option.description = "Download the game for the given OS platform"
+	platform_option.values = ["windows"]
+	platform_option.value_type = TYPE_STRING
+	if await _app_supports_linux(app_id):
+		platform_option.values.append("linux")
+	if platform_option.values.size() > 1:
+		options.append(platform_option)
+
+	return options
+
+
+## Installs the given library item. [DEPRECATED]
+func install(item: LibraryLaunchItem) -> void:
+	install_to(item)
+
+
+## Installs the given library item to the given location.
+func install_to(item: LibraryLaunchItem, location: InstallLocation = null, options: Dictionary = {}) -> void:
+	var app_id := item.provider_app_id
+	var location_name := "default location"
+	var target_path := ""
+	if location:
+		location_name = location.name
+		target_path = location.name
+	logger.info("Installing " + item.name + " with app ID " + app_id + " to " + location_name + " with options: " + str(options))
+	
+	# Wait if another app is installing
+	while true:
+		if not steam.is_app_installing:
+			break
+		logger.info("Another app is currently being installed. Waiting...")
+		await get_tree().create_timer(2.0).timeout
+
 	# Check if title supports Linux or Windows
 	if await _app_supports_linux(app_id):
 		await steam.set_platform_type("linux")
 	else:
 		await steam.set_platform_type("windows")
-	steam.install(app_id)
+	steam.install(app_id, target_path)
 
 	# Connect to progress updates
 	var on_progress := func(id: String, bytes_cur: int, bytes_total: int):
@@ -69,7 +143,7 @@ func install(item: LibraryLaunchItem) -> void:
 	steam.install_progressed.disconnect(on_progress)
 
 
-# Updates the given library item.
+## Updates the given library item.
 func update(item: LibraryLaunchItem) -> void:
 	# Start the install
 	var app_id := item.provider_app_id
@@ -131,10 +205,10 @@ func _on_logged_in(status: SteamClient.LOGIN_STATUS):
 	logger.info("Logged in. Updating library cache from Steam.")
 	var cmd := func():
 		return await _load_library(Cache.FLAGS.SAVE)
-	var items: Array = await thread_pool.exec(cmd)
+	var items: Array = await thread_pool.exec(cmd, "load_steam_library")
 	for i in items:
 		var item: LibraryLaunchItem = i
-		if not LibraryManager.has_app(item.name):
+		if not library_manager.has_app(item.name):
 			var msg := "App {0} was not loaded. Adding item".format([item.name])
 			logger.info(msg)
 			launch_item_added.emit(item)
@@ -247,10 +321,9 @@ func _load_local_library(
 
 	logger.info("Parsing local Steam library...")
 	var vdf_string := FileAccess.get_file_as_string(libraryfolders_path)
-	var vdf: VDF = VDF.new()
+	var vdf := Vdf.new()
 	if vdf.parse(vdf_string) != OK:
-		var err_line := vdf.get_error_line()
-		logger.debug("Error parsing vdf output on line " + str(err_line) + ": " + vdf.get_error_message())
+		logger.debug("Error parsing vdf: " + vdf.get_error_message())
 		return []
 	var libraryfolders := vdf.get_data()
 	
@@ -363,7 +436,8 @@ func _app_info_to_launch_item(info: Dictionary, is_installed: bool) -> LibraryLa
 	item.provider_app_id = app_id
 	item.name = data["name"]
 	item.command = "steam"
-	item.args = ["-gamepadui", "-steamos3", "-steampal", "-steamdeck", "-silent", "steam://rungameid/" + app_id]
+	item.args = ["-gamepadui", "steam://rungameid/" + app_id]
+	#item.args = ["-silent", "steam://rungameid/" + app_id]
 	item.categories = categories
 	item.tags = ["steam"]
 	item.tags.append_array(tags)

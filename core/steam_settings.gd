@@ -75,20 +75,12 @@ func _on_login(login_status: SteamClient.LOGIN_STATUS) -> void:
 		tfa_box.visible = true
 		tfa_box.grab_focus.call_deferred()
 
-		var notify := Notification.new("Two-factor authentication required")
-		notify.icon = icon
-		notification_manager.show(notify)
-
 		return
 
 	# If we logged, woo!
 	if login_status == SteamClient.LOGIN_STATUS.OK:
 		logged_in_status.status = logged_in_status.STATUS.CLOSED
 		logged_in_status.color = "green"
-		
-		var notify := Notification.new("Successfully logged in to Steam")
-		notify.icon = icon
-		notification_manager.show(notify)
 		
 		return
 
