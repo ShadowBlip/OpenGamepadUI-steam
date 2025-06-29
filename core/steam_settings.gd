@@ -15,6 +15,9 @@ const icon := preload("res://plugins/steam/assets/steam.svg")
 
 @onready var steam: SteamClient = get_tree().get_first_node_in_group("steam_client")
 
+var logging_in := false
+
+
 # Called when the node enters the scene tree for the first time.
 func _ready() -> void:
 	# If we have logged in before, populate the username box
@@ -70,6 +73,11 @@ func _on_client_ready() -> void:
 
 
 func _on_login(login_status: SteamClient.LOGIN_STATUS) -> void:
+	if login_status == SteamClient.LOGIN_STATUS.WAITING_GUARD_CONFIRM:
+		return
+	logging_in = false
+	login_button.text = "Login"
+
 	# Un-hide the 2fa box if we require two-factor auth
 	if login_status == SteamClient.LOGIN_STATUS.TFA_REQUIRED:
 		tfa_box.visible = true
@@ -87,8 +95,12 @@ func _on_login(login_status: SteamClient.LOGIN_STATUS) -> void:
 
 # Called when the login button is pressed
 func _on_login_button() -> void:
+	if logging_in:
+		return
 	var username: String = user_box.text
 	var password: String = pass_box.text
 	var tfa_code: String = tfa_box.text
 	settings_manager.set_value("plugin.steam", "user", username)
+	logging_in = true
+	login_button.text = "Logging in..."
 	steam.login(username, password, tfa_code)

@@ -10,7 +10,6 @@ const SteamAPIClient := preload("res://plugins/steam/core/steam_api_client.gd")
 const _apps_cache_file: String = "apps.json"
 const _local_apps_cache_file: String = "local_apps.json"
 
-var thread_pool := load("res://core/systems/threading/thread_pool.tres") as ThreadPool
 var steam_api_client := SteamAPIClient.new()
 var libraryfolders_path := "/".join([OS.get_environment("HOME"), ".steam/steam/steamapps/libraryfolders.vdf"])
 
@@ -21,7 +20,6 @@ var libraryfolders_path := "/".join([OS.get_environment("HOME"), ".steam/steam/s
 func _ready() -> void:
 	super()
 	add_child(steam_api_client)
-	thread_pool.start()
 	logger = Log.get_logger("Steam", Log.LEVEL.DEBUG)
 	logger.info("Steam Library loaded")
 	steam.logged_in.connect(_on_logged_in)
@@ -195,6 +193,18 @@ func has_update(item: LibraryLaunchItem) -> bool:
 	return false
 
 
+## App lifecycle hooks are used to execute some logic before, during, or after
+## launch, such as compiling shaders before launch or starting/stopping a service.
+func get_app_lifecycle_hooks() -> Array[AppLifecycleHook]:
+	var hooks: Array[AppLifecycleHook] = [
+		PreLaunchHook.new(steam),
+		ExitHook.new(steam),
+	]
+	logger.info("Returning lifecycle hooks:", hooks)
+
+	return hooks
+
+
 # Re-load our library when we've logged in
 func _on_logged_in(status: SteamClient.LOGIN_STATUS):
 	if status != SteamClient.LOGIN_STATUS.OK:
@@ -203,9 +213,7 @@ func _on_logged_in(status: SteamClient.LOGIN_STATUS):
 	# Upon login, fetch the user's library without loading it from cache and
 	# reconcile it with the library manager.
 	logger.info("Logged in. Updating library cache from Steam.")
-	var cmd := func():
-		return await _load_library(Cache.FLAGS.SAVE)
-	var items: Array = await thread_pool.exec(cmd, "load_steam_library")
+	var items: Array = await _load_library(Cache.FLAGS.SAVE)
 	for i in items:
 		var item: LibraryLaunchItem = i
 		if not library_manager.has_app(item.name):
@@ -254,17 +262,20 @@ func _load_library(
 	
 	# Get all available apps
 	var app_ids: PackedInt64Array = await get_available_apps()
+	logger.debug("Found app IDs:", app_ids)
 
 	# Get installed apps
 	var apps_installed: Array = await steam.get_installed_apps()
 	var app_ids_installed := PackedStringArray()
 	for app in apps_installed:
 		app_ids_installed.append(app["id"])
+	logger.debug("Found installed app ids:", app_ids_installed)
 
 	# Get the app info for each discovered game and create a launch item for
 	# it.
 	var items := [] as Array[LibraryLaunchItem]
 	for app_id in app_ids:
+		logger.debug("Fetching app info for", app_id)
 		var id := str(app_id)
 		var info := await get_app_info(id, caching_flags)
 		
@@ -436,8 +447,8 @@ func _app_info_to_launch_item(info: Dictionary, is_installed: bool) -> LibraryLa
 	item.provider_app_id = app_id
 	item.name = data["name"]
 	item.command = "steam"
+	#item.args = ["-gamepadui", "-steamos3", "-steampal", "-steamdeck", "-silent", "steam://rungameid/" + app_id]
 	item.args = ["-gamepadui", "steam://rungameid/" + app_id]
-	#item.args = ["-silent", "steam://rungameid/" + app_id]
 	item.categories = categories
 	item.tags = ["steam"]
 	item.tags.append_array(tags)
@@ -459,3 +470,107 @@ func _app_supports_linux(app_id: String) -> bool:
 		return false
 	
 	return info[app_id]["data"]["platform"]["linux"]
+
+
+## Hook to execute before app launch. This hook will try to ensure the app is
+## up-to-date before starting and will update the text in the game loading menu.
+## TODO: Also include shader compilation
+class PreLaunchHook extends AppLifecycleHook:
+	var _steam: SteamClient
+	var logger: Logger
+
+	func _init(steam: SteamClient) -> void:
+		_hook_type = AppLifecycleHook.TYPE.PRE_LAUNCH
+		_steam = steam
+		logger = Log.get_logger("Steam")
+
+	func get_name() -> String:
+		return "EnsureUpdated"
+
+	func execute(item: LibraryLaunchItem) -> void:
+		# Ensure the app is up-to-date
+		await self.ensure_app_updated(item)
+
+		# Set the startup movie to use so it's less obnoxious
+		await self.set_steam_startup_video()
+
+		logger.info("Starting app")
+		self.notified.emit("Starting Steam...")
+
+	func ensure_app_updated(item: LibraryLaunchItem) -> void:
+		var network_manager := load("res://core/systems/network/network_manager.tres") as NetworkManagerInstance
+		if network_manager.connectivity <= network_manager.NM_CONNECTIVITY_NONE:
+			return
+		if not item.provider_app_id.is_valid_int():
+			return
+		logger.info("Updating app before launch")
+		self.notified.emit("Updating app...")
+		await _steam.update(item.provider_app_id)
+
+	func set_steam_startup_video() -> void:
+		var steam_path := _steam.steamcmd_dir
+		var source_path := "/".join([steam_path, "steamui/movies/steam_os_suspend.webm"])
+		var override_dir := "/".join([steam_path, "config/uioverrides/movies"])
+		var override_path := "/".join([override_dir, "bigpicture_startup.webm"])
+
+		if not FileAccess.file_exists(source_path):
+			logger.debug("No source startup video found:", source_path)
+			logger.debug("Skipping setting steam startup video")
+			return
+
+		# Create the override directory if it does not exist
+		if not DirAccess.dir_exists_absolute(override_dir):
+			if DirAccess.make_dir_recursive_absolute(override_dir) != OK:
+				logger.warn("Failed to create startup video override directory")
+				return
+
+		# If a video override already exists, back it up
+		if FileAccess.file_exists(override_path):
+			logger.debug("Steam startup video override already exists. Backing up...")
+			var err := DirAccess.rename_absolute(override_path, override_path + ".ogui_backup")
+			if err != OK:
+				logger.warn("Failed to backup existing steam startup video")
+				return
+
+		# Copy the source video to the override path so that video will be played
+		# instead of the normal bigpicture video.
+		logger.debug("Setting Steam startup video to:", source_path)
+		var cmd := Command.create("cp", [source_path, override_path])
+		if await cmd.execute() != OK:
+			logger.warn("Failed to set steam startup video:", cmd.stderr)
+		return
+
+
+## Hook to execute when the app exits. This will try to restore the startup video.
+class ExitHook extends  AppLifecycleHook:
+	var _steam: SteamClient
+	var logger: Logger
+
+	func _init(steam: SteamClient) -> void:
+		_hook_type = AppLifecycleHook.TYPE.EXIT
+		_steam = steam
+		logger = Log.get_logger("Steam")
+
+	func get_name() -> String:
+		return "RestoreStartupVideo"
+
+	func execute(_item: LibraryLaunchItem) -> void:
+		await self.restore_steam_startup_video()
+
+	func restore_steam_startup_video() -> void:
+		var steam_path := _steam.steamcmd_dir
+		var override_path := "/".join([steam_path, "config/uioverrides/movies/bigpicture_startup.webm"])
+		if not FileAccess.file_exists(override_path):
+			return
+
+		logger.debug("Removing steam startup video override")
+		if DirAccess.remove_absolute(override_path) != OK:
+			logger.warn("Unable to remove steam startup video override")
+
+		if FileAccess.file_exists(override_path + ".ogui_backup"):
+			logger.debug("Restoring steam startup video override")
+			DirAccess.rename_absolute(override_path + ".ogui_backup", override_path)
+
+	func _notification(what: int) -> void:
+		if what == NOTIFICATION_PREDELETE:
+			self.restore_steam_startup_video()

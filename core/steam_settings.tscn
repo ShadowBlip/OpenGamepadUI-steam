@@ -1,6 +1,6 @@
 [gd_scene load_steps=5 format=3 uid="uid://th8bv5uv0kng"]
 
-[ext_resource type="Script" path="res://plugins/steam/core/steam_settings.gd" id="1_482tk"]
+[ext_resource type="Script" uid="uid://dhuah8i5c5mfy" path="res://plugins/steam/core/steam_settings.gd" id="1_482tk"]
 [ext_resource type="PackedScene" uid="uid://d1hlp6c8wrqgv" path="res://core/ui/components/status.tscn" id="2_xf1mt"]
 [ext_resource type="PackedScene" uid="uid://d1rjdfxxrdccf" path="res://core/ui/components/text_input.tscn" id="3_d62ly"]
 [ext_resource type="PackedScene" uid="uid://c71ayw7pcw6u6" path="res://core/ui/components/card_button.tscn" id="4_jlnf0"]

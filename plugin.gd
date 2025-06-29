@@ -51,14 +51,16 @@ func _on_client_ready():
 		_ui_notification("Steam login required")
 		return
 
+	if not steam.has_steamcmd_session():
+		return
+
 	# If we have logged in before, try logging in with saved credentials
-	if steam.has_steamcmd_session():
-		logger.info("Previous session exists. Trying to log in with existing session.")
-		if steam.restore_steamcmd_session() != OK:
-			logger.error("Failed to restore previous steam session")
-			return
-		logger.info("Session restored successfully")
-		steam.login(user)
+	logger.info("Previous session exists. Trying to log in with existing session.")
+	if steam.restore_steamcmd_session() != OK:
+		logger.error("Failed to restore previous steam session")
+		return
+	logger.info("Session restored successfully")
+	steam.login(user)
 
 
 # Triggers when the Steam Client is logged in
@@ -71,6 +73,9 @@ func _on_client_logged_in(status: SteamClient.LOGIN_STATUS):
 		await _ensure_tools_installed()
 		if not steam.has_steam_run():
 			_on_first_boot.call_deferred()
+
+	if status == SteamClient.LOGIN_STATUS.WAITING_GUARD_CONFIRM:
+		_ui_notification("Please confirm the login in the Steam Mobile app on your phone.")
 
 	if status == SteamClient.LOGIN_STATUS.INVALID_PASSWORD:
 		_ui_notification("Steam login required")
