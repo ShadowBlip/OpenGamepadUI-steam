@@ -89,8 +89,13 @@ func _on_login(login_status: SteamClient.LOGIN_STATUS) -> void:
 	if login_status == SteamClient.LOGIN_STATUS.OK:
 		logged_in_status.status = logged_in_status.STATUS.CLOSED
 		logged_in_status.color = "green"
+		pass_box.visible = false
 		
 		return
+
+	# Show the password box in all other cases
+	pass_box.visible = true
+	pass_box.grab_focus.call_deferred()
 
 
 # Called when the login button is pressed

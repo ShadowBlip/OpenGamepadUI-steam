@@ -448,6 +448,7 @@ func _app_info_to_launch_item(info: Dictionary, is_installed: bool) -> LibraryLa
 	item.name = data["name"]
 	item.command = "steam"
 	#item.args = ["-gamepadui", "-steamos3", "-steampal", "-steamdeck", "-silent", "steam://rungameid/" + app_id]
+	#item.args = ["-silent", "steam://rungameid/" + app_id]
 	item.args = ["-gamepadui", "steam://rungameid/" + app_id]
 	item.categories = categories
 	item.tags = ["steam"]
@@ -475,13 +476,16 @@ func _app_supports_linux(app_id: String) -> bool:
 ## Hook to execute before app launch. This hook will try to ensure the app is
 ## up-to-date before starting and will update the text in the game loading menu.
 ## TODO: Also include shader compilation
+## TODO: Ensure steam is not currently running
 class PreLaunchHook extends AppLifecycleHook:
 	var _steam: SteamClient
+	var _replace_intro_video: bool
 	var logger: Logger
 
 	func _init(steam: SteamClient) -> void:
 		_hook_type = AppLifecycleHook.TYPE.PRE_LAUNCH
 		_steam = steam
+		_replace_intro_video = false # disable for now
 		logger = Log.get_logger("Steam")
 
 	func get_name() -> String:
@@ -492,7 +496,8 @@ class PreLaunchHook extends AppLifecycleHook:
 		await self.ensure_app_updated(item)
 
 		# Set the startup movie to use so it's less obnoxious
-		await self.set_steam_startup_video()
+		if _replace_intro_video:
+			await self.set_steam_startup_video()
 
 		logger.info("Starting app")
 		self.notified.emit("Starting Steam...")
@@ -503,6 +508,27 @@ class PreLaunchHook extends AppLifecycleHook:
 			return
 		if not item.provider_app_id.is_valid_int():
 			return
+		if not _steam.is_logged_in:
+			return
+
+		# Linux Runtime
+		const SNIPER_APP_ID := "1628350"
+		logger.info("Updating Sniper Linux Runtime before launch")
+		self.notified.emit("Updating Sniper Linux Runtime...")
+		await _steam.update(SNIPER_APP_ID)
+
+		# Proton
+		const PROTON_APP_ID := "1493710"
+		logger.info("Updating Proton before launch")
+		self.notified.emit("Updating Proton...")
+		await _steam.update(PROTON_APP_ID)
+
+		# Common Redistributables
+		const REDIST_APP_ID := "228980"
+		logger.info("Updating Steamworks Common Redistributables before launch")
+		self.notified.emit("Updating Steamworks Common Redistributables...")
+		await _steam.update(REDIST_APP_ID)
+
 		logger.info("Updating app before launch")
 		self.notified.emit("Updating app...")
 		await _steam.update(item.provider_app_id)
@@ -544,18 +570,21 @@ class PreLaunchHook extends AppLifecycleHook:
 ## Hook to execute when the app exits. This will try to restore the startup video.
 class ExitHook extends  AppLifecycleHook:
 	var _steam: SteamClient
+	var _replace_intro_video: bool
 	var logger: Logger
 
 	func _init(steam: SteamClient) -> void:
 		_hook_type = AppLifecycleHook.TYPE.EXIT
 		_steam = steam
+		_replace_intro_video = false # disable for now
 		logger = Log.get_logger("Steam")
 
 	func get_name() -> String:
 		return "RestoreStartupVideo"
 
 	func execute(_item: LibraryLaunchItem) -> void:
-		await self.restore_steam_startup_video()
+		if _replace_intro_video:
+			await self.restore_steam_startup_video()
 
 	func restore_steam_startup_video() -> void:
 		var steam_path := _steam.steamcmd_dir
@@ -572,5 +601,5 @@ class ExitHook extends  AppLifecycleHook:
 			DirAccess.rename_absolute(override_path + ".ogui_backup", override_path)
 
 	func _notification(what: int) -> void:
-		if what == NOTIFICATION_PREDELETE:
+		if what == NOTIFICATION_PREDELETE and self._replace_intro_video:
 			self.restore_steam_startup_video()
