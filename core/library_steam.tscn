@@ -1,6 +1,6 @@
 [gd_scene load_steps=3 format=3 uid="uid://br414d4krimhy"]
 
-[ext_resource type="Script" path="res://plugins/steam/core/library_steam.gd" id="1_p81j2"]
+[ext_resource type="Script" uid="uid://cu13wjeapdbu2" path="res://plugins/steam/core/library_steam.gd" id="1_p81j2"]
 [ext_resource type="Texture2D" uid="uid://b0n1pmakgpf0o" path="res://plugins/steam/assets/steam.svg" id="2_rhnrx"]
 
 [node name="SteamLibrary" type="Node"]

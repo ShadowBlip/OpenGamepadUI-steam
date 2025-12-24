@@ -1,6 +1,6 @@
 [gd_scene load_steps=2 format=3 uid="uid://bmc54u8in03g2"]
 
-[ext_resource type="Script" path="res://plugins/steam/core/steam_client.gd" id="1_6aaas"]
+[ext_resource type="Script" uid="uid://kdgpkosh1j7j" path="res://plugins/steam/core/steam_client.gd" id="1_6aaas"]
 
 [node name="SteamClient" type="Node"]
 script = ExtResource("1_6aaas")

@@ -5,13 +5,13 @@ var settings_manager := load("res://core/global/settings_manager.tres") as Setti
 var notification_manager := load("res://core/global/notification_manager.tres") as NotificationManager
 const icon := preload("res://plugins/steam/assets/steam.svg")
 
-@onready var status := $%Status
-@onready var connected_status := $%ConnectedStatus
-@onready var logged_in_status := $%LoggedInStatus
-@onready var user_box := $%UsernameTextInput
-@onready var pass_box := $%PasswordTextInput
-@onready var tfa_box := $%TFATextInput
-@onready var login_button := $%LoginButton
+@onready var status := $%Status as StatusPanel
+@onready var connected_status := $%ConnectedStatus as StatusPanel
+@onready var logged_in_status := $%LoggedInStatus as StatusPanel
+@onready var user_box := $%UsernameTextInput as ComponentTextInput
+@onready var pass_box := $%PasswordTextInput as ComponentTextInput
+@onready var tfa_box := $%TFATextInput as ComponentTextInput
+@onready var login_button := $%LoginButton as CardButton
 
 @onready var steam: SteamClient = get_tree().get_first_node_in_group("steam_client")
 

@@ -110,10 +110,11 @@ func install_to(item: LibraryLaunchItem, location: InstallLocation = null, optio
 		await get_tree().create_timer(2.0).timeout
 
 	# Check if title supports Linux or Windows
-	if await _app_supports_linux(app_id):
-		await steam.set_platform_type("linux")
-	else:
-		await steam.set_platform_type("windows")
+	#if await _app_supports_linux(app_id):
+	#	await steam.set_platform_type("linux")
+	#else:
+	#	await steam.set_platform_type("windows")
+	await steam.set_platform_type("windows") # Install the Windows version of everything for now
 	steam.install(app_id, target_path)
 
 	# Connect to progress updates
@@ -480,7 +481,7 @@ func _app_supports_linux(app_id: String) -> bool:
 class PreLaunchHook extends AppLifecycleHook:
 	var _steam: SteamClient
 	var _replace_intro_video: bool
-	var logger: Logger
+	var logger: CustomLogger
 
 	func _init(steam: SteamClient) -> void:
 		_hook_type = AppLifecycleHook.TYPE.PRE_LAUNCH
@@ -571,7 +572,7 @@ class PreLaunchHook extends AppLifecycleHook:
 class ExitHook extends  AppLifecycleHook:
 	var _steam: SteamClient
 	var _replace_intro_video: bool
-	var logger: Logger
+	var logger: CustomLogger
 
 	func _init(steam: SteamClient) -> void:
 		_hook_type = AppLifecycleHook.TYPE.EXIT

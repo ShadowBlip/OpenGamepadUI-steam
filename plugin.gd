@@ -17,6 +17,7 @@ func _ready() -> void:
 	logger = Log.get_logger("Steam", Log.LEVEL.INFO)
 
 	# Load the Steam client
+	@warning_ignore("unsafe_method_access")
 	steam = load("res://plugins/steam/core/steam_client.tscn").instantiate()
 	steam.bootstrap_finished.connect(_on_client_start)
 	steam.client_ready.connect(_on_client_ready)
@@ -28,10 +29,12 @@ func _ready() -> void:
 	#add_child(store)
 
 	# Load the Library implementation
+	@warning_ignore("unsafe_method_access")
 	var library: Library = load("res://plugins/steam/core/library_steam.tscn").instantiate()
 	add_child(library)
 
 	# Load the boxart implementation
+	@warning_ignore("unsafe_method_access")
 	var boxart: BoxArtProvider = load("res://plugins/steam/core/boxart_steam.tscn").instantiate()
 	add_child(boxart)
 

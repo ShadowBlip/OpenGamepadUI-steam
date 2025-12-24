@@ -48,6 +48,7 @@ var network_manager := load("res://core/systems/network/network_manager.tres") a
 var steam_dir := "/".join([OS.get_environment("HOME"), ".local", "share", "Steam"])
 var steamcmd_dir := "/".join([steam_dir, "steamcmd"])
 var steam_bootstrap_file := "/".join([steam_dir, "linux64", "steamclient.so"])
+var steam_registry_file := "/".join([OS.get_environment("HOME"), ".steam", "registry.vdf"])
 var steamcmd := "/".join([steamcmd_dir, "steamcmd.sh"])
 var vdf_local_path := "/".join([steam_dir, "local.vdf"])
 var vdf_config_path := "/".join([steam_dir, "config", "config.vdf"])
@@ -96,6 +97,10 @@ func bootstrap() -> void:
 			return
 		logger.info("Successfully bootstrapped steam")
 
+	# Disable OOBE
+	if _disable_oobe() != OK:
+		logger.warn("Unable to disable OOBE")
+
 	# Download and install steamcmd if not found 
 	if not FileAccess.file_exists(steamcmd):
 		logger.info("The steamcmd binary wasn't found. Trying to install it.")
@@ -141,6 +146,41 @@ func bootstrap_steam() -> Error:
 	pty = null
 	await get_tree().process_frame
 
+	return OK
+
+
+func _disable_oobe() -> Error:
+	# Disable the OOTBE
+	var registry_data := {}
+	if FileAccess.file_exists(steam_registry_file):
+		logger.debug(steam_registry_file, "exists, loading existing configuration")
+		var registry_vdf := FileAccess.get_file_as_string(steam_registry_file)
+		var vdf := Vdf.new()
+		if vdf.parse(registry_vdf) != OK:
+			logger.warn("Failed to parse", vdf_config_path, ":", vdf.get_error_message())
+		else:
+			registry_data = vdf.data
+
+	if not "Registry" in registry_data:
+		registry_data["Registry"] = {}
+	if not "HKCU" in registry_data["Registry"]:
+		registry_data["Registry"]["HKCU"] = {}
+	if not "Software" in registry_data["Registry"]["HKCU"]:
+		registry_data["Registry"]["HKCU"]["Software"] = {}
+	if not "Valve" in registry_data["Registry"]["HKCU"]["Software"]:
+		registry_data["Registry"]["HKCU"]["Software"]["Valve"] = {}
+	if not "Steam" in registry_data["Registry"]["HKCU"]["Software"]["Valve"]:
+		registry_data["Registry"]["HKCU"]["Software"]["Valve"]["Steam"] = {}
+	registry_data["Registry"]["HKCU"]["Software"]["Valve"]["Steam"]["CompletedOOBE"] = "1"
+	registry_data["Registry"]["HKCU"]["Software"]["Valve"]["Steam"]["StartupMode"] = "0"
+
+	var registry_data_vdf := Vdf.stringify(registry_data)
+	var registry_file := FileAccess.open(steam_registry_file, FileAccess.WRITE)
+	if not registry_file:
+		logger.warn("Unable to open", steam_registry_file, "to save registry.")
+		return ERR_CANT_CREATE
+	registry_file.store_string(registry_data_vdf)
+	
 	return OK
 
 
@@ -259,7 +299,7 @@ func login(user: String, password := "", tfa := "") -> void:
 	# This method will get called each time new lines of output are 
 	# available from the command we run.
 	var on_progress := func(output: Array):
-		for line in output:
+		for line: String in output:
 			# Send the user's password if prompted
 			if line.contains("password:"):
 				pty.write_line(password)
@@ -447,6 +487,7 @@ func save_loginusers(accounts: Dictionary) -> void:
 
 ## Configures Steam to enable proton for all games
 func enable_proton() -> void:
+	logger.debug("Enabling proton for all games")
 	if not FileAccess.file_exists(vdf_config_path):
 		logger.warn("config.vdf does not exist at:", vdf_config_path, ". Unable to enable proton.")
 		return
@@ -458,7 +499,7 @@ func enable_proton() -> void:
 	if vdf.parse(config_vdf) != OK:
 		logger.warn("Failed to parse", vdf_config_path, ":", vdf.get_error_message())
 		return
-	logger.trace("Successfully parsed config:", vdf.data)
+	logger.debug("Successfully parsed config:", vdf.data)
 
 	# Validate the structure. Sometimes these keys can be in lowercase or uppercase.
 	var config_key := "InstallConfigStore"
@@ -821,10 +862,10 @@ func _install_update(app_id: String, path: String = "", try: int = 0) -> INSTALL
 	var success := [] # Needs to be an array to be updated from lambda
 	var on_progress := func(output: Array):
 		# [" Update state (0x61) downloading, progress: 84.45 (1421013576 / 1682619731)", ""]
-		for line in output:
+		for line: String in output:
 			if line == "":
 				continue
-			logger.info("Install progress: ", line)
+			logger.debug("Install progress: ", "'" + line.strip_edges() + "'")
 			if line.contains("Success! App ") and line.contains("already up to date."):
 				success.append("up-to-date")
 				continue
