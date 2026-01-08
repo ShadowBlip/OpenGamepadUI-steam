@@ -1,8 +1,8 @@
 {
   "plugin.id": "steam",
   "plugin.name": "Steam",
-  "plugin.version": "1.2.0",
-  "plugin.min-api-version": "1.0.0",
+  "plugin.version": "2.0.0",
+  "plugin.min-api-version": "2.0.0",
   "plugin.link": "https://github.com/ShadowBlip/OpenGamepadUI-steam",
   "plugin.source": "https://github.com/ShadowBlip/OpenGamepadUI-steam",
   "plugin.description": "Steam library for OpenGamepadUI",
