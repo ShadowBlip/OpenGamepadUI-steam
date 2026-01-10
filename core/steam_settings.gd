@@ -5,15 +5,18 @@ var settings_manager := load("res://core/global/settings_manager.tres") as Setti
 var notification_manager := load("res://core/global/notification_manager.tres") as NotificationManager
 const icon := preload("res://plugins/steam/assets/steam.svg")
 
-@onready var status := $%Status
-@onready var connected_status := $%ConnectedStatus
-@onready var logged_in_status := $%LoggedInStatus
-@onready var user_box := $%UsernameTextInput
-@onready var pass_box := $%PasswordTextInput
-@onready var tfa_box := $%TFATextInput
-@onready var login_button := $%LoginButton
+@onready var status := $%Status as StatusPanel
+@onready var connected_status := $%ConnectedStatus as StatusPanel
+@onready var logged_in_status := $%LoggedInStatus as StatusPanel
+@onready var user_box := $%UsernameTextInput as ComponentTextInput
+@onready var pass_box := $%PasswordTextInput as ComponentTextInput
+@onready var tfa_box := $%TFATextInput as ComponentTextInput
+@onready var login_button := $%LoginButton as CardButton
 
 @onready var steam: SteamClient = get_tree().get_first_node_in_group("steam_client")
+
+var logging_in := false
+
 
 # Called when the node enters the scene tree for the first time.
 func _ready() -> void:
@@ -70,14 +73,15 @@ func _on_client_ready() -> void:
 
 
 func _on_login(login_status: SteamClient.LOGIN_STATUS) -> void:
+	if login_status == SteamClient.LOGIN_STATUS.WAITING_GUARD_CONFIRM:
+		return
+	logging_in = false
+	login_button.text = "Login"
+
 	# Un-hide the 2fa box if we require two-factor auth
 	if login_status == SteamClient.LOGIN_STATUS.TFA_REQUIRED:
 		tfa_box.visible = true
 		tfa_box.grab_focus.call_deferred()
-
-		var notify := Notification.new("Two-factor authentication required")
-		notify.icon = icon
-		notification_manager.show(notify)
 
 		return
 
@@ -85,18 +89,23 @@ func _on_login(login_status: SteamClient.LOGIN_STATUS) -> void:
 	if login_status == SteamClient.LOGIN_STATUS.OK:
 		logged_in_status.status = logged_in_status.STATUS.CLOSED
 		logged_in_status.color = "green"
-		
-		var notify := Notification.new("Successfully logged in to Steam")
-		notify.icon = icon
-		notification_manager.show(notify)
+		pass_box.visible = false
 		
 		return
+
+	# Show the password box in all other cases
+	pass_box.visible = true
+	pass_box.grab_focus.call_deferred()
 
 
 # Called when the login button is pressed
 func _on_login_button() -> void:
+	if logging_in:
+		return
 	var username: String = user_box.text
 	var password: String = pass_box.text
 	var tfa_code: String = tfa_box.text
 	settings_manager.set_value("plugin.steam", "user", username)
+	logging_in = true
+	login_button.text = "Logging in..."
 	steam.login(username, password, tfa_code)

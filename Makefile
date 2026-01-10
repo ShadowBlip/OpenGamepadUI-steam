@@ -9,6 +9,9 @@ PLUGINS_DIR := $(OPENGAMEPAD_UI_BASE)/plugins
 BUILD_DIR := $(OPENGAMEPAD_UI_BASE)/build
 INSTALL_DIR := $(HOME)/.local/share/opengamepadui/plugins
 
+# Include any user defined settings
+-include settings.mk
+
 ##@ General
 
 # The help target prints out all targets with their descriptions organized
@@ -34,7 +37,7 @@ dist: build ## Build and package plugin
 .PHONY: build
 build: $(PLUGINS_DIR)/$(PLUGIN_ID) export_preset ## Build the plugin
 	@echo "Exporting plugin package"
-	cd $(OPENGAMEPAD_UI_BASE) && $(MAKE) addons
+	cd $(OPENGAMEPAD_UI_BASE) && $(MAKE) import
 	mkdir -p dist
 	touch dist/.gdignore
 	$(GODOT) --headless \
@@ -48,6 +51,10 @@ install: dist ## Installs the plugin
 	cp -r dist/* "$(INSTALL_DIR)"
 	rm -rf $(INSTALL_DIR)/$(PLUGIN_ID)
 	@echo "Installed plugin to $(INSTALL_DIR)"
+
+.PHONY: edit
+edit: $(PLUGINS_DIR)/$(PLUGIN_ID) ## Open the project in the Godot editor
+	cd $(OPENGAMEPAD_UI_BASE) && $(MAKE) edit
 
 $(OPENGAMEPAD_UI_BASE):
 	git clone $(OPENGAMEPAD_UI_REPO) $@
@@ -66,3 +73,7 @@ export_preset: $(OPENGAMEPAD_UI_BASE) ## Configure plugin export preset
 		echo "Preset not configured"; \
 		sed 's/PRESET_NUM/$(PRESET_NUM)/g; s/PLUGIN_NAME/$(PLUGIN_NAME)/g; s/PLUGIN_ID/$(PLUGIN_ID)/g' export_presets.cfg >> $(EXPORT_PRESETS); \
 	fi
+
+.PHONY: deploy
+deploy: dist
+	scp ./dist/steam.zip $(SSH_USER)@$(SSH_HOST):~/.local/share/opengamepadui/plugins

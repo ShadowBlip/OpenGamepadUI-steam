@@ -1,6 +1,7 @@
-[gd_scene load_steps=5 format=3 uid="uid://th8bv5uv0kng"]
+[gd_scene load_steps=6 format=3 uid="uid://th8bv5uv0kng"]
 
-[ext_resource type="Script" path="res://plugins/steam/core/steam_settings.gd" id="1_482tk"]
+[ext_resource type="Script" uid="uid://dhuah8i5c5mfy" path="res://plugins/steam/core/steam_settings.gd" id="1_482tk"]
+[ext_resource type="PackedScene" uid="uid://8m20p2s0v5gb" path="res://core/systems/input/focus_group.tscn" id="2_7meib"]
 [ext_resource type="PackedScene" uid="uid://d1hlp6c8wrqgv" path="res://core/ui/components/status.tscn" id="2_xf1mt"]
 [ext_resource type="PackedScene" uid="uid://d1rjdfxxrdccf" path="res://core/ui/components/text_input.tscn" id="3_d62ly"]
 [ext_resource type="PackedScene" uid="uid://c71ayw7pcw6u6" path="res://core/ui/components/card_button.tscn" id="4_jlnf0"]
@@ -18,6 +19,10 @@ layout_mode = 2
 size_flags_horizontal = 3
 size_flags_vertical = 0
 theme_override_constants/separation = 10
+
+[node name="FocusGroup" parent="ContentContainer" node_paths=PackedStringArray("current_focus") instance=ExtResource("2_7meib")]
+current_focus = NodePath("../Status")
+wrap_focus = false
 
 [node name="Status" parent="ContentContainer" instance=ExtResource("2_xf1mt")]
 unique_name_in_owner = true
@@ -52,6 +57,7 @@ description = ""
 
 [node name="PasswordTextInput" parent="ContentContainer" instance=ExtResource("3_d62ly")]
 unique_name_in_owner = true
+visible = false
 layout_mode = 2
 title = "Password"
 description = ""

@@ -5,13 +5,11 @@ extends Library
 # Steam Overlay Config is in:
 # ~/.steam/steam/userdata/<user_id>/config/localconfig.vdf
 
-const VDF = preload("res://plugins/steam/core/vdf.gd")
 const SteamClient := preload("res://plugins/steam/core/steam_client.gd")
 const SteamAPIClient := preload("res://plugins/steam/core/steam_api_client.gd")
 const _apps_cache_file: String = "apps.json"
 const _local_apps_cache_file: String = "local_apps.json"
 
-var thread_pool := load("res://core/systems/threading/thread_pool.tres") as ThreadPool
 var steam_api_client := SteamAPIClient.new()
 var libraryfolders_path := "/".join([OS.get_environment("HOME"), ".steam/steam/steamapps/libraryfolders.vdf"])
 
@@ -27,22 +25,97 @@ func _ready() -> void:
 	steam.logged_in.connect(_on_logged_in)
 
 
-# Return a list of installed steam apps. Called by the LibraryManager.
+## Return a list of installed steam apps. Called by the LibraryManager.
 func get_library_launch_items() -> Array[LibraryLaunchItem]:
 	return await _load_library(Cache.FLAGS.LOAD | Cache.FLAGS.SAVE)
 
 
-# Installs the given library item.
-func install(item: LibraryLaunchItem) -> void:
-	# Start the install
+## Returns an array of available install locations for this library provider.
+func get_available_install_locations(item: LibraryLaunchItem = null) -> Array[InstallLocation]:
+	var locations: Array[InstallLocation] = []
+
+	# Parse libraryfolder.vdf for any extra volumes that are available.
+	if not FileAccess.file_exists(libraryfolders_path):
+		logger.warn("The libraryfolders.vdf file was not found at: " + libraryfolders_path)
+		return locations
+
+	var vdf_string := FileAccess.get_file_as_string(libraryfolders_path)
+	var vdf := Vdf.new()
+	if vdf.parse(vdf_string) != OK:
+		logger.debug("Error parsing vdf: " + vdf.get_error_message())
+		return locations
+	var libraryfolders := vdf.get_data()
+
+	if not "libraryfolders" in libraryfolders:
+		return locations
+	var app_ids := PackedStringArray()
+	var entries := libraryfolders["libraryfolders"] as Dictionary
+	for folder in entries.values():
+		if not "path" in folder:
+			continue
+		var path := folder["path"] as String
+		if not DirAccess.dir_exists_absolute(path):
+			continue
+		var location := Library.InstallLocation.new()
+		location.id = path
+		location.name = path
+		location.total_space_mb = 0 # TODO: calculate space
+		location.free_space_mb = 0
+		locations.append(location)
+
+	return locations
+
+
+## Returns an array of install options for the given [LibraryLaunchItem].
+## Install options are arbitrary and are provider-specific. They allow the user
+## to select things like the language of a game to install, etc.
+func get_install_options(item: LibraryLaunchItem) -> Array[InstallOption]:
 	var app_id := item.provider_app_id
-	logger.info("Installing " + item.name + " with app ID: " + app_id)
-	# Check if title supports Linux or Windows
+	var options: Array[InstallOption] = []
+
+	var platform_option := InstallOption.new()
+	platform_option.id = "os"
+	platform_option.name = "Platform"
+	platform_option.description = "Download the game for the given OS platform"
+	platform_option.values = ["windows"]
+	platform_option.value_type = TYPE_STRING
 	if await _app_supports_linux(app_id):
-		await steam.set_platform_type("linux")
-	else:
-		await steam.set_platform_type("windows")
-	steam.install(app_id)
+		platform_option.values.append("linux")
+	if platform_option.values.size() > 1:
+		options.append(platform_option)
+
+	return options
+
+
+## Installs the given library item. [DEPRECATED]
+func install(item: LibraryLaunchItem) -> void:
+	install_to(item)
+
+
+## Installs the given library item to the given location.
+func install_to(item: LibraryLaunchItem, location: InstallLocation = null, options: Dictionary = {}) -> void:
+	var app_id := item.provider_app_id
+	var location_name := "default location"
+	var target_path := ""
+	if location:
+		location_name = location.name
+		target_path = location.name
+	logger.info("Installing " + item.name + " with app ID " + app_id + " to " + location_name + " with options: " + str(options))
+	
+	# Wait if another app is installing
+	while true:
+		if not steam.is_app_installing:
+			break
+		logger.info("Another app is currently being installed. Waiting...")
+		await get_tree().create_timer(2.0).timeout
+
+	# Check if title supports Linux or Windows
+	#if await _app_supports_linux(app_id):
+	#	await steam.set_platform_type("linux")
+	#else:
+	#	await steam.set_platform_type("windows")
+	await steam.set_platform_type("windows") # Install the Windows version of everything for now
+	steam.install(app_id, target_path)
 
 	# Connect to progress updates
 	var on_progress := func(id: String, bytes_cur: int, bytes_total: int):
@@ -69,7 +142,7 @@ func install(item: LibraryLaunchItem) -> void:
 	steam.install_progressed.disconnect(on_progress)
 
 
-# Updates the given library item.
+## Updates the given library item.
 func update(item: LibraryLaunchItem) -> void:
 	# Start the install
 	var app_id := item.provider_app_id
@@ -121,6 +194,18 @@ func has_update(item: LibraryLaunchItem) -> bool:
 	return false
 
 
+## App lifecycle hooks are used to execute some logic before, during, or after
+## launch, such as compiling shaders before launch or starting/stopping a service.
+func get_app_lifecycle_hooks() -> Array[AppLifecycleHook]:
+	var hooks: Array[AppLifecycleHook] = [
+		PreLaunchHook.new(steam),
+		ExitHook.new(steam),
+	]
+	logger.info("Returning lifecycle hooks:", hooks)
+
+	return hooks
+
+
 # Re-load our library when we've logged in
 func _on_logged_in(status: SteamClient.LOGIN_STATUS):
 	if status != SteamClient.LOGIN_STATUS.OK:
@@ -129,12 +214,10 @@ func _on_logged_in(status: SteamClient.LOGIN_STATUS):
 	# Upon login, fetch the user's library without loading it from cache and
 	# reconcile it with the library manager.
 	logger.info("Logged in. Updating library cache from Steam.")
-	var cmd := func():
-		return await _load_library(Cache.FLAGS.SAVE)
-	var items: Array = await thread_pool.exec(cmd)
+	var items: Array = await _load_library(Cache.FLAGS.SAVE)
 	for i in items:
 		var item: LibraryLaunchItem = i
-		if not LibraryManager.has_app(item.name):
+		if not library_manager.has_app(item.name):
 			var msg := "App {0} was not loaded. Adding item".format([item.name])
 			logger.info(msg)
 			launch_item_added.emit(item)
@@ -180,17 +263,20 @@ func _load_library(
 	
 	# Get all available apps
 	var app_ids: PackedInt64Array = await get_available_apps()
+	logger.debug("Found app IDs:", app_ids)
 
 	# Get installed apps
 	var apps_installed: Array = await steam.get_installed_apps()
 	var app_ids_installed := PackedStringArray()
 	for app in apps_installed:
 		app_ids_installed.append(app["id"])
+	logger.debug("Found installed app ids:", app_ids_installed)
 
 	# Get the app info for each discovered game and create a launch item for
 	# it.
 	var items := [] as Array[LibraryLaunchItem]
 	for app_id in app_ids:
+		logger.debug("Fetching app info for", app_id)
 		var id := str(app_id)
 		var info := await get_app_info(id, caching_flags)
 		
@@ -247,10 +333,9 @@ func _load_local_library(
 
 	logger.info("Parsing local Steam library...")
 	var vdf_string := FileAccess.get_file_as_string(libraryfolders_path)
-	var vdf: VDF = VDF.new()
+	var vdf := Vdf.new()
 	if vdf.parse(vdf_string) != OK:
-		var err_line := vdf.get_error_line()
-		logger.debug("Error parsing vdf output on line " + str(err_line) + ": " + vdf.get_error_message())
+		logger.debug("Error parsing vdf: " + vdf.get_error_message())
 		return []
 	var libraryfolders := vdf.get_data()
 	
@@ -363,7 +448,9 @@ func _app_info_to_launch_item(info: Dictionary, is_installed: bool) -> LibraryLa
 	item.provider_app_id = app_id
 	item.name = data["name"]
 	item.command = "steam"
-	item.args = ["-gamepadui", "-steamos3", "-steampal", "-steamdeck", "-silent", "steam://rungameid/" + app_id]
+	#item.args = ["-gamepadui", "-steamos3", "-steampal", "-steamdeck", "-silent", "steam://rungameid/" + app_id]
+	#item.args = ["-silent", "steam://rungameid/" + app_id]
+	item.args = ["-gamepadui", "steam://rungameid/" + app_id]
 	item.categories = categories
 	item.tags = ["steam"]
 	item.tags.append_array(tags)
@@ -385,3 +472,135 @@ func _app_supports_linux(app_id: String) -> bool:
 		return false
 	
 	return info[app_id]["data"]["platform"]["linux"]
+
+
+## Hook to execute before app launch. This hook will try to ensure the app is
+## up-to-date before starting and will update the text in the game loading menu.
+## TODO: Also include shader compilation
+## TODO: Ensure steam is not currently running
+class PreLaunchHook extends AppLifecycleHook:
+	var _steam: SteamClient
+	var _replace_intro_video: bool
+	var logger: CustomLogger
+
+	func _init(steam: SteamClient) -> void:
+		_hook_type = AppLifecycleHook.TYPE.PRE_LAUNCH
+		_steam = steam
+		_replace_intro_video = false # disable for now
+		logger = Log.get_logger("Steam")
+
+	func get_name() -> String:
+		return "EnsureUpdated"
+
+	func execute(item: LibraryLaunchItem) -> void:
+		# Ensure the app is up-to-date
+		await self.ensure_app_updated(item)
+
+		# Set the startup movie to use so it's less obnoxious
+		if _replace_intro_video:
+			await self.set_steam_startup_video()
+
+		logger.info("Starting app")
+		self.notified.emit("Starting Steam...")
+
+	func ensure_app_updated(item: LibraryLaunchItem) -> void:
+		var network_manager := load("res://core/systems/network/network_manager.tres") as NetworkManagerInstance
+		if network_manager.connectivity <= network_manager.NM_CONNECTIVITY_NONE:
+			return
+		if not item.provider_app_id.is_valid_int():
+			return
+		if not _steam.is_logged_in:
+			return
+
+		# Linux Runtime
+		const SNIPER_APP_ID := "1628350"
+		logger.info("Updating Sniper Linux Runtime before launch")
+		self.notified.emit("Updating Sniper Linux Runtime...")
+		await _steam.update(SNIPER_APP_ID)
+
+		# Proton
+		const PROTON_APP_ID := "1493710"
+		logger.info("Updating Proton before launch")
+		self.notified.emit("Updating Proton...")
+		await _steam.update(PROTON_APP_ID)
+
+		# Common Redistributables
+		const REDIST_APP_ID := "228980"
+		logger.info("Updating Steamworks Common Redistributables before launch")
+		self.notified.emit("Updating Steamworks Common Redistributables...")
+		await _steam.update(REDIST_APP_ID)
+
+		logger.info("Updating app before launch")
+		self.notified.emit("Updating app...")
+		await _steam.update(item.provider_app_id)
+
+	func set_steam_startup_video() -> void:
+		var steam_path := _steam.steamcmd_dir
+		var source_path := "/".join([steam_path, "steamui/movies/steam_os_suspend.webm"])
+		var override_dir := "/".join([steam_path, "config/uioverrides/movies"])
+		var override_path := "/".join([override_dir, "bigpicture_startup.webm"])
+
+		if not FileAccess.file_exists(source_path):
+			logger.debug("No source startup video found:", source_path)
+			logger.debug("Skipping setting steam startup video")
+			return
+
+		# Create the override directory if it does not exist
+		if not DirAccess.dir_exists_absolute(override_dir):
+			if DirAccess.make_dir_recursive_absolute(override_dir) != OK:
+				logger.warn("Failed to create startup video override directory")
+				return
+
+		# If a video override already exists, back it up
+		if FileAccess.file_exists(override_path):
+			logger.debug("Steam startup video override already exists. Backing up...")
+			var err := DirAccess.rename_absolute(override_path, override_path + ".ogui_backup")
+			if err != OK:
+				logger.warn("Failed to backup existing steam startup video")
+				return
+
+		# Copy the source video to the override path so that video will be played
+		# instead of the normal bigpicture video.
+		logger.debug("Setting Steam startup video to:", source_path)
+		var cmd := Command.create("cp", [source_path, override_path])
+		if await cmd.execute() != OK:
+			logger.warn("Failed to set steam startup video:", cmd.stderr)
+		return
+
+
+## Hook to execute when the app exits. This will try to restore the startup video.
+class ExitHook extends  AppLifecycleHook:
+	var _steam: SteamClient
+	var _replace_intro_video: bool
+	var logger: CustomLogger
+
+	func _init(steam: SteamClient) -> void:
+		_hook_type = AppLifecycleHook.TYPE.EXIT
+		_steam = steam
+		_replace_intro_video = false # disable for now
+		logger = Log.get_logger("Steam")
+
+	func get_name() -> String:
+		return "RestoreStartupVideo"
+
+	func execute(_item: LibraryLaunchItem) -> void:
+		if _replace_intro_video:
+			await self.restore_steam_startup_video()
+
+	func restore_steam_startup_video() -> void:
+		var steam_path := _steam.steamcmd_dir
+		var override_path := "/".join([steam_path, "config/uioverrides/movies/bigpicture_startup.webm"])
+		if not FileAccess.file_exists(override_path):
+			return
+
+		logger.debug("Removing steam startup video override")
+		if DirAccess.remove_absolute(override_path) != OK:
+			logger.warn("Unable to remove steam startup video override")
+
+		if FileAccess.file_exists(override_path + ".ogui_backup"):
+			logger.debug("Restoring steam startup video override")
+			DirAccess.rename_absolute(override_path + ".ogui_backup", override_path)
+
+	func _notification(what: int) -> void:
+		if what == NOTIFICATION_PREDELETE and self._replace_intro_video:
+			self.restore_steam_startup_video()
